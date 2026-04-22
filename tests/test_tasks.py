@@ -187,3 +187,115 @@ def test_cannot_delete_another_users_task(client):
     response = client.delete(f"/tasks/{task_id}", headers=headers2)
 
     assert response.status_code in [403, 404]
+
+
+def test_create_task_with_high_priority(client):
+    headers = register_and_login(client, "user1@example.com")
+
+    response = client.post(
+        "/tasks",
+        json={"title": "High priority task", "priority": "high"},
+        headers=headers
+    )
+
+    assert response.status_code in [200, 201]
+    data = response.json()
+    assert data["priority"] == "high"
+
+
+def test_create_task_with_low_priority(client):
+    headers = register_and_login(client, "user1@example.com")
+
+    response = client.post(
+        "/tasks",
+        json={"title": "Low priority task", "priority": "low"},
+        headers=headers
+    )
+
+    assert response.status_code in [200, 201]
+    data = response.json()
+    assert data["priority"] == "low"
+
+
+def test_create_task_defaults_to_medium_priority(client):
+    headers = register_and_login(client, "user1@example.com")
+
+    response = client.post(
+        "/tasks",
+        json={"title": "Default priority task"},
+        headers=headers
+    )
+
+    assert response.status_code in [200, 201]
+    data = response.json()
+    assert data["priority"] == "medium"
+
+
+def test_filter_tasks_by_high_priority(client):
+    headers = register_and_login(client, "user1@example.com")
+
+    client.post("/tasks", json={"title": "High task", "priority": "high"}, headers=headers)
+    client.post("/tasks", json={"title": "Medium task", "priority": "medium"}, headers=headers)
+    client.post("/tasks", json={"title": "Low task", "priority": "low"}, headers=headers)
+
+    response = client.get("/tasks?priority=high", headers=headers)
+
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 1
+    assert data[0]["title"] == "High task"
+    assert data[0]["priority"] == "high"
+
+
+def test_filter_tasks_by_low_priority(client):
+    headers = register_and_login(client, "user1@example.com")
+
+    client.post("/tasks", json={"title": "High task", "priority": "high"}, headers=headers)
+    client.post("/tasks", json={"title": "Medium task", "priority": "medium"}, headers=headers)
+    client.post("/tasks", json={"title": "Low task", "priority": "low"}, headers=headers)
+
+    response = client.get("/tasks?priority=low", headers=headers)
+
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 1
+    assert data[0]["title"] == "Low task"
+    assert data[0]["priority"] == "low"
+
+
+def test_filter_tasks_without_priority_returns_all(client):
+    headers = register_and_login(client, "user1@example.com")
+
+    client.post("/tasks", json={"title": "High task", "priority": "high"}, headers=headers)
+    client.post("/tasks", json={"title": "Medium task", "priority": "medium"}, headers=headers)
+    client.post("/tasks", json={"title": "Low task", "priority": "low"}, headers=headers)
+
+    response = client.get("/tasks", headers=headers)
+
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 3
+
+
+def test_update_task_priority(client):
+    headers = register_and_login(client, "user1@example.com")
+
+    create_response = client.post(
+        "/tasks",
+        json={"title": "Medium task"},
+        headers=headers
+    )
+    task_id = create_response.json()["id"]
+    assert create_response.json()["priority"] == "medium"
+
+    patch_response = client.patch(
+        f"/tasks/{task_id}",
+        json={"priority": "high"},
+        headers=headers
+    )
+
+    assert patch_response.status_code == 200
+    assert patch_response.json()["priority"] == "high"
+
+    get_response = client.get(f"/tasks/{task_id}", headers=headers)
+    assert get_response.json()["priority"] == "high"
