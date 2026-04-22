@@ -354,3 +354,95 @@ def test_exclude_completed_tasks(client):
     assert "pending" in statuses
     assert "in_progress" in statuses
     assert "completed" not in statuses
+
+
+def test_update_task_status_specialized_endpoint(client):
+    headers = register_and_login(client, "user1@example.com")
+
+    create_response = client.post(
+        "/tasks",
+        json={"title": "Test task"},
+        headers=headers
+    )
+    task_id = create_response.json()["id"]
+
+    response = client.patch(
+        f"/tasks/{task_id}/status",
+        json={"status": "in_progress"},
+        headers=headers
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "in_progress"
+    assert data["completed"] is False
+
+    response2 = client.patch(
+        f"/tasks/{task_id}/status",
+        json={"status": "completed"},
+        headers=headers
+    )
+
+    assert response2.status_code == 200
+    data2 = response2.json()
+    assert data2["status"] == "completed"
+    assert data2["completed"] is True
+
+
+def test_update_task_status_specialized_endpoint_invalid_status(client):
+    headers = register_and_login(client, "user1@example.com")
+
+    create_response = client.post(
+        "/tasks",
+        json={"title": "Test task"},
+        headers=headers
+    )
+    task_id = create_response.json()["id"]
+
+    response = client.patch(
+        f"/tasks/{task_id}/status",
+        json={"status": "invalid_status"},
+        headers=headers
+    )
+
+    assert response.status_code == 422
+
+
+def test_update_task_status_specialized_endpoint_missing_status(client):
+    headers = register_and_login(client, "user1@example.com")
+
+    create_response = client.post(
+        "/tasks",
+        json={"title": "Test task"},
+        headers=headers
+    )
+    task_id = create_response.json()["id"]
+
+    response = client.patch(
+        f"/tasks/{task_id}/status",
+        json={},
+        headers=headers
+    )
+
+    assert response.status_code == 422
+
+
+def test_cannot_update_another_users_task_status(client):
+    headers1 = register_and_login(client, "user1@example.com")
+    headers2 = register_and_login(client, "user2@example.com")
+
+    create_response = client.post(
+        "/tasks",
+        json={"title": "Private task"},
+        headers=headers1
+    )
+
+    task_id = create_response.json()["id"]
+
+    response = client.patch(
+        f"/tasks/{task_id}/status",
+        json={"status": "completed"},
+        headers=headers2
+    )
+
+    assert response.status_code in [403, 404]

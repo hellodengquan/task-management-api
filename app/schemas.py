@@ -51,6 +51,10 @@ class TaskUpdate(BaseModel):
     status: Optional[TaskStatus] = None
 
 
+class TaskStatusUpdate(BaseModel):
+    status: TaskStatus
+
+
 class TaskOut(BaseModel):
     id: int
     title: str

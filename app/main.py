@@ -95,6 +95,19 @@ def patch_task(
     return task
 
 
+@app.patch("/tasks/{task_id}/status", response_model=schemas.TaskOut)
+def update_task_status(
+    task_id: int,
+    status_update: schemas.TaskStatusUpdate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    task = crud.update_task_status(db, current_user.id, task_id, status_update.status)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    return task
+
+
 @app.delete("/tasks/{task_id}", status_code=204)
 def delete_task(
     task_id: int,

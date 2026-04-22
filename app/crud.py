@@ -103,6 +103,23 @@ def update_task(db: Session, owner_id: int, task_id: int, updates: schemas.TaskU
     return task
 
 
+def update_task_status(
+    db: Session,
+    owner_id: int,
+    task_id: int,
+    new_status: TaskStatus,
+):
+    task = get_task(db, owner_id, task_id)
+    if not task:
+        return None
+
+    task.status = new_status
+
+    db.commit()
+    db.refresh(task)
+    return task
+
+
 def delete_task(db: Session, owner_id: int, task_id: int) -> bool:
     task = get_task(db, owner_id, task_id)
     if not task:
