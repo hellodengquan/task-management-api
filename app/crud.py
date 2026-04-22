@@ -1,4 +1,6 @@
 # app/crud.py
+from typing import Optional
+
 from sqlalchemy.orm import Session
 
 from . import models, schemas
@@ -45,6 +47,7 @@ def create_task(db: Session, owner_id: int, task_in: schemas.TaskCreate):
     task = models.Task(
         title=task_in.title,
         description=task_in.description,
+        priority=models.Priority(task_in.priority.value),
         owner_id=owner_id,
     )
     db.add(task)
@@ -53,13 +56,14 @@ def create_task(db: Session, owner_id: int, task_in: schemas.TaskCreate):
     return task
 
 
-def list_tasks(db: Session, owner_id: int):
-    return (
+def list_tasks(db: Session, owner_id: int, priority: Optional[models.Priority] = None):
+    query = (
         db.query(models.Task)
         .filter(models.Task.owner_id == owner_id)
-        .order_by(models.Task.created_at.desc())
-        .all()
     )
+    if priority is not None:
+        query = query.filter(models.Task.priority == priority)
+    return query.order_by(models.Task.created_at.desc()).all()
 
 
 def get_task(db: Session, owner_id: int, task_id: int):
@@ -79,6 +83,8 @@ def update_task(db: Session, owner_id: int, task_id: int, updates: schemas.TaskU
         task.title = updates.title
     if updates.description is not None:
         task.description = updates.description
+    if updates.priority is not None:
+        task.priority = models.Priority(updates.priority.value)
     if updates.completed is not None:
         task.completed = updates.completed
 

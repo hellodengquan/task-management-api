@@ -1,4 +1,6 @@
 # app/main.py
+from typing import Optional
+
 from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
@@ -53,10 +55,14 @@ def create_task(
 
 @app.get("/tasks", response_model=list[schemas.TaskOut])
 def get_tasks(
+    priority: Optional[schemas.Priority] = None,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    return crud.list_tasks(db, current_user.id)
+    model_priority = None
+    if priority is not None:
+        model_priority = models.Priority(priority.value)
+    return crud.list_tasks(db, current_user.id, model_priority)
 
 
 @app.get("/tasks/{task_id}", response_model=schemas.TaskOut)

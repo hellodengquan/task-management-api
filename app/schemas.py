@@ -1,8 +1,15 @@
 # app/schemas.py
+import enum
 from datetime import datetime
 from typing import Optional
 
 from pydantic import BaseModel, EmailStr, Field, ConfigDict
+
+
+class Priority(str, enum.Enum):
+    HIGH = "high"
+    MEDIUM = "medium"
+    LOW = "low"
 
 
 # =====================
@@ -39,11 +46,13 @@ class Token(BaseModel):
 class TaskCreate(BaseModel):
     title: str = Field(..., min_length=1, max_length=200)
     description: Optional[str] = Field(default=None, max_length=2000)
+    priority: Priority = Field(default=Priority.MEDIUM)
 
 
 class TaskUpdate(BaseModel):
     title: Optional[str] = Field(default=None, min_length=1, max_length=200)
     description: Optional[str] = Field(default=None, max_length=2000)
+    priority: Optional[Priority] = None
     completed: Optional[bool] = None
 
 
@@ -51,6 +60,7 @@ class TaskOut(BaseModel):
     id: int
     title: str
     description: Optional[str]
+    priority: Priority
     completed: bool
     created_at: datetime
     updated_at: datetime
