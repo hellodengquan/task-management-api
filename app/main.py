@@ -1,11 +1,14 @@
 # app/main.py
-from fastapi import Depends, FastAPI, HTTPException, status
+from typing import Optional
+
+from fastapi import Depends, FastAPI, HTTPException, Query, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
 from . import models, schemas, crud
 from .deps import get_db, get_current_user
 from .auth import create_access_token
+from .models import TaskStatus
 
 app = FastAPI(title="Task Management API")
 
@@ -53,10 +56,18 @@ def create_task(
 
 @app.get("/tasks", response_model=list[schemas.TaskOut])
 def get_tasks(
+    status: Optional[TaskStatus] = Query(
+        default=None,
+        description="按状态过滤任务 (pending, in_progress, completed)"
+    ),
+    exclude_completed: Optional[bool] = Query(
+        default=None,
+        description="是否排除已完成的任务 (true/false)"
+    ),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    return crud.list_tasks(db, current_user.id)
+    return crud.list_tasks(db, current_user.id, status, exclude_completed)
 
 
 @app.get("/tasks/{task_id}", response_model=schemas.TaskOut)

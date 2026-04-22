@@ -1,8 +1,11 @@
 # app/crud.py
+from typing import List, Optional
+
 from sqlalchemy.orm import Session
 
 from . import models, schemas
 from .auth import hash_password, verify_password
+from .models import TaskStatus
 
 
 # =====================
@@ -42,24 +45,35 @@ def authenticate_user(db: Session, email: str, password: str):
 # =====================
 
 def create_task(db: Session, owner_id: int, task_in: schemas.TaskCreate):
-    task = models.Task(
-        title=task_in.title,
-        description=task_in.description,
-        owner_id=owner_id,
-    )
+    task_data = {
+        "title": task_in.title,
+        "description": task_in.description,
+        "owner_id": owner_id,
+    }
+    if task_in.status is not None:
+        task_data["status"] = task_in.status
+    task = models.Task(**task_data)
     db.add(task)
     db.commit()
     db.refresh(task)
     return task
 
 
-def list_tasks(db: Session, owner_id: int):
-    return (
-        db.query(models.Task)
-        .filter(models.Task.owner_id == owner_id)
-        .order_by(models.Task.created_at.desc())
-        .all()
-    )
+def list_tasks(
+    db: Session,
+    owner_id: int,
+    status: Optional[TaskStatus] = None,
+    exclude_completed: Optional[bool] = None,
+):
+    query = db.query(models.Task).filter(models.Task.owner_id == owner_id)
+
+    if status is not None:
+        query = query.filter(models.Task.status == status)
+
+    if exclude_completed:
+        query = query.filter(models.Task.status != TaskStatus.COMPLETED)
+
+    return query.order_by(models.Task.created_at.desc()).all()
 
 
 def get_task(db: Session, owner_id: int, task_id: int):
@@ -81,6 +95,8 @@ def update_task(db: Session, owner_id: int, task_id: int, updates: schemas.TaskU
         task.description = updates.description
     if updates.completed is not None:
         task.completed = updates.completed
+    if updates.status is not None:
+        task.status = updates.status
 
     db.commit()
     db.refresh(task)

@@ -4,6 +4,8 @@ from typing import Optional
 
 from pydantic import BaseModel, EmailStr, Field, ConfigDict
 
+from .models import TaskStatus
+
 
 # =====================
 # USERS
@@ -39,12 +41,14 @@ class Token(BaseModel):
 class TaskCreate(BaseModel):
     title: str = Field(..., min_length=1, max_length=200)
     description: Optional[str] = Field(default=None, max_length=2000)
+    status: Optional[TaskStatus] = Field(default=None)
 
 
 class TaskUpdate(BaseModel):
     title: Optional[str] = Field(default=None, min_length=1, max_length=200)
     description: Optional[str] = Field(default=None, max_length=2000)
     completed: Optional[bool] = None
+    status: Optional[TaskStatus] = None
 
 
 class TaskOut(BaseModel):
@@ -52,6 +56,7 @@ class TaskOut(BaseModel):
     title: str
     description: Optional[str]
     completed: bool
+    status: TaskStatus
     created_at: datetime
     updated_at: datetime
 
