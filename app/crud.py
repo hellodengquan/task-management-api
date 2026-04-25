@@ -2,6 +2,7 @@
 from typing import List, Optional
 from sqlalchemy.orm import Session
 from sqlalchemy import select, func
+from sqlalchemy.exc import IntegrityError
 
 from . import models, schemas
 from .auth import hash_password, verify_password
@@ -78,10 +79,14 @@ def create_tag(db: Session, owner_id: int, tag_in: schemas.TagCreate):
         color=tag_in.color,
         owner_id=owner_id,
     )
-    db.add(tag)
-    db.commit()
-    db.refresh(tag)
-    return tag
+    try:
+        db.add(tag)
+        db.commit()
+        db.refresh(tag)
+        return tag
+    except IntegrityError:
+        db.rollback()
+        return None
 
 
 def update_tag(db: Session, owner_id: int, tag_id: int, updates: schemas.TagUpdate):
@@ -98,9 +103,13 @@ def update_tag(db: Session, owner_id: int, tag_id: int, updates: schemas.TagUpda
     if updates.color is not None:
         tag.color = updates.color
 
-    db.commit()
-    db.refresh(tag)
-    return tag
+    try:
+        db.commit()
+        db.refresh(tag)
+        return tag
+    except IntegrityError:
+        db.rollback()
+        return None
 
 
 def delete_tag(db: Session, owner_id: int, tag_id: int) -> bool:
