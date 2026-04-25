@@ -57,8 +57,7 @@ class Task(Base):
     owner = relationship("User", back_populates="tasks")
     history = relationship(
         "TaskHistory",
-        back_populates="task",
-        cascade="all, delete-orphan"
+        back_populates="task"
     )
 
 
