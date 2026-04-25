@@ -1,5 +1,6 @@
 # app/main.py
-from fastapi import Depends, FastAPI, HTTPException, status
+from typing import List, Optional
+from fastapi import Depends, FastAPI, HTTPException, status, Query
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
@@ -33,9 +34,72 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
 
-    # Put user id in "sub" (subject)
     token = create_access_token({"sub": str(user.id)})
     return {"access_token": token, "token_type": "bearer"}
+
+
+# =====================
+# TAGS
+# =====================
+
+@app.post("/tags", response_model=schemas.TagOut, status_code=201)
+def create_tag(
+    tag_in: schemas.TagCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    tag = crud.create_tag(db, current_user.id, tag_in)
+    if not tag:
+        raise HTTPException(status_code=400, detail=f"Tag with name '{tag_in.name}' already exists")
+    return tag
+
+
+@app.get("/tags", response_model=list[schemas.TagOut])
+def get_tags(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    return crud.list_tags(db, current_user.id)
+
+
+@app.get("/tags/{tag_id}", response_model=schemas.TagOut)
+def get_tag(
+    tag_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    tag = crud.get_tag(db, current_user.id, tag_id)
+    if not tag:
+        raise HTTPException(status_code=404, detail="Tag not found")
+    return tag
+
+
+@app.patch("/tags/{tag_id}", response_model=schemas.TagOut)
+def patch_tag(
+    tag_id: int,
+    updates: schemas.TagUpdate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    tag = crud.update_tag(db, current_user.id, tag_id, updates)
+    if not tag:
+        tag_check = crud.get_tag(db, current_user.id, tag_id)
+        if not tag_check:
+            raise HTTPException(status_code=404, detail="Tag not found")
+        raise HTTPException(status_code=400, detail="Tag with this name already exists")
+    return tag
+
+
+@app.delete("/tags/{tag_id}", status_code=204)
+def delete_tag(
+    tag_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    ok = crud.delete_tag(db, current_user.id, tag_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Tag not found")
+    return None
 
 
 # =====================
@@ -53,10 +117,11 @@ def create_task(
 
 @app.get("/tasks", response_model=list[schemas.TaskOut])
 def get_tasks(
+    tag_ids: Optional[List[int]] = Query(default=None, alias="tag_ids"),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    return crud.list_tasks(db, current_user.id)
+    return crud.list_tasks(db, current_user.id, tag_ids)
 
 
 @app.get("/tasks/{task_id}", response_model=schemas.TaskOut)

@@ -1,10 +1,18 @@
 # app/models.py
 from datetime import datetime
 
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Text, Table
 from sqlalchemy.orm import relationship
 
 from .db import Base
+
+
+task_tags = Table(
+    "task_tags",
+    Base.metadata,
+    Column("task_id", Integer, ForeignKey("tasks.id"), primary_key=True),
+    Column("tag_id", Integer, ForeignKey("tags.id"), primary_key=True),
+)
 
 
 class User(Base):
@@ -28,6 +36,33 @@ class User(Base):
         cascade="all, delete-orphan"
     )
 
+    tags = relationship(
+        "Tag",
+        back_populates="owner",
+        cascade="all, delete-orphan"
+    )
+
+
+class Tag(Base):
+    __tablename__ = "tags"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(50), nullable=False)
+    color = Column(String(7), nullable=False, default="#3b82f6")
+
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(
+        DateTime,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+        nullable=False,
+    )
+
+    owner_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+
+    owner = relationship("User", back_populates="tags")
+    tasks = relationship("Task", secondary=task_tags, back_populates="tags")
+
 
 class Task(Base):
     __tablename__ = "tasks"
@@ -48,3 +83,4 @@ class Task(Base):
     owner_id = Column(Integer, ForeignKey("users.id"), nullable=False)
 
     owner = relationship("User", back_populates="tasks")
+    tags = relationship("Tag", secondary=task_tags, back_populates="tasks")
