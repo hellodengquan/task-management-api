@@ -95,3 +95,69 @@ def delete_task(db: Session, owner_id: int, task_id: int) -> bool:
     db.delete(task)
     db.commit()
     return True
+
+
+# =====================
+# COMMENTS
+# =====================
+
+def create_comment(db: Session, task_id: int, author_id: int, comment_in: schemas.CommentCreate):
+    comment = models.Comment(
+        content=comment_in.content,
+        task_id=task_id,
+        author_id=author_id,
+    )
+    db.add(comment)
+    db.commit()
+    db.refresh(comment)
+    return comment
+
+
+def get_task_comments(db: Session, task_id: int, skip: int = 0, limit: int = 20):
+    return (
+        db.query(models.Comment)
+        .filter(models.Comment.task_id == task_id)
+        .order_by(models.Comment.created_at.desc())
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
+
+
+def count_task_comments(db: Session, task_id: int) -> int:
+    return (
+        db.query(models.Comment)
+        .filter(models.Comment.task_id == task_id)
+        .count()
+    )
+
+
+def get_comment(db: Session, comment_id: int):
+    return (
+        db.query(models.Comment)
+        .filter(models.Comment.id == comment_id)
+        .first()
+    )
+
+
+def update_comment(db: Session, comment_id: int, updates: schemas.CommentUpdate):
+    comment = get_comment(db, comment_id)
+    if not comment:
+        return None
+
+    if updates.content is not None:
+        comment.content = updates.content
+
+    db.commit()
+    db.refresh(comment)
+    return comment
+
+
+def delete_comment(db: Session, comment_id: int) -> bool:
+    comment = get_comment(db, comment_id)
+    if not comment:
+        return False
+
+    db.delete(comment)
+    db.commit()
+    return True

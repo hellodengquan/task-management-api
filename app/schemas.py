@@ -56,3 +56,35 @@ class TaskOut(BaseModel):
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+# =====================
+# COMMENTS
+# =====================
+
+class CommentCreate(BaseModel):
+    content: str = Field(..., min_length=1, max_length=2000)
+
+
+class CommentUpdate(BaseModel):
+    content: Optional[str] = Field(default=None, min_length=1, max_length=2000)
+
+
+class CommentOut(BaseModel):
+    id: int
+    content: str
+    task_id: int
+    author_id: int
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class CommentPaginationOut(BaseModel):
+    items: list[CommentOut]
+    total: int
+    skip: int
+    limit: int
+
+    model_config = ConfigDict(from_attributes=True)

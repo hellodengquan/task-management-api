@@ -27,6 +27,12 @@ class User(Base):
         back_populates="owner",
         cascade="all, delete-orphan"
     )
+    
+    comments = relationship(
+        "Comment",
+        back_populates="author",
+        cascade="all, delete-orphan"
+    )
 
 
 class Task(Base):
@@ -48,3 +54,30 @@ class Task(Base):
     owner_id = Column(Integer, ForeignKey("users.id"), nullable=False)
 
     owner = relationship("User", back_populates="tasks")
+    
+    comments = relationship(
+        "Comment",
+        back_populates="task",
+        cascade="all, delete-orphan"
+    )
+
+
+class Comment(Base):
+    __tablename__ = "comments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    content = Column(Text, nullable=False)
+
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(
+        DateTime,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+        nullable=False,
+    )
+
+    task_id = Column(Integer, ForeignKey("tasks.id"), nullable=False)
+    author_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+
+    task = relationship("Task", back_populates="comments")
+    author = relationship("User", back_populates="comments")
