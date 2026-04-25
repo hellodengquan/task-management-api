@@ -94,3 +94,19 @@ def delete_task(
     if not ok:
         raise HTTPException(status_code=404, detail="Task not found")
     return None
+
+
+# =====================
+# TASK HISTORY
+# =====================
+
+@app.get("/tasks/{task_id}/history", response_model=list[schemas.TaskHistoryOut])
+def get_task_history(
+    task_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    history = crud.get_task_history_with_owner_check(db, current_user.id, task_id)
+    if history is None:
+        raise HTTPException(status_code=404, detail="Task not found")
+    return history

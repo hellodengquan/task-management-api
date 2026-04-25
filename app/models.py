@@ -1,10 +1,17 @@
 # app/models.py
 from datetime import datetime
+from enum import Enum as PyEnum
 
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, Column, DateTime, Enum, ForeignKey, Integer, JSON, String, Text
 from sqlalchemy.orm import relationship
 
 from .db import Base
+
+
+class ActionType(str, PyEnum):
+    CREATE = "create"
+    UPDATE = "update"
+    DELETE = "delete"
 
 
 class User(Base):
@@ -48,3 +55,23 @@ class Task(Base):
     owner_id = Column(Integer, ForeignKey("users.id"), nullable=False)
 
     owner = relationship("User", back_populates="tasks")
+    history = relationship(
+        "TaskHistory",
+        back_populates="task",
+        cascade="all, delete-orphan"
+    )
+
+
+class TaskHistory(Base):
+    __tablename__ = "task_history"
+
+    id = Column(Integer, primary_key=True, index=True)
+    task_id = Column(Integer, ForeignKey("tasks.id"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    action = Column(Enum(ActionType), nullable=False)
+    details = Column(JSON, nullable=True)
+
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    task = relationship("Task", back_populates="history")
+    user = relationship("User")

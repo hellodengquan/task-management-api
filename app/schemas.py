@@ -1,8 +1,15 @@
 # app/schemas.py
 from datetime import datetime
-from typing import Optional
+from enum import Enum
+from typing import Optional, Any
 
 from pydantic import BaseModel, EmailStr, Field, ConfigDict
+
+
+class ActionType(str, Enum):
+    CREATE = "create"
+    UPDATE = "update"
+    DELETE = "delete"
 
 
 # =====================
@@ -54,5 +61,20 @@ class TaskOut(BaseModel):
     completed: bool
     created_at: datetime
     updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# =====================
+# TASK HISTORY
+# =====================
+
+class TaskHistoryOut(BaseModel):
+    id: int
+    task_id: int
+    user_id: int
+    action: ActionType
+    details: Optional[dict[str, Any]]
+    created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
