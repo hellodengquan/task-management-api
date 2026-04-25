@@ -2,14 +2,25 @@ import os
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
+from sqlalchemy.engine import Engine
 from sqlalchemy.orm import sessionmaker
+from sqlite3 import Connection as SQLite3Connection
 
 from app.db import Base
 from app.deps import get_db
 from app.main import app
 
 TEST_DATABASE_URL = "sqlite:///./test_task_management.db"
+
+
+@event.listens_for(Engine, "connect")
+def _enable_sqlite_foreign_keys(dbapi_connection, connection_record):
+    if isinstance(dbapi_connection, SQLite3Connection):
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.close()
+
 
 engine = create_engine(
     TEST_DATABASE_URL,
