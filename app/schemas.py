@@ -39,12 +39,14 @@ class Token(BaseModel):
 class TaskCreate(BaseModel):
     title: str = Field(..., min_length=1, max_length=200)
     description: Optional[str] = Field(default=None, max_length=2000)
+    parent_id: Optional[int] = None
 
 
 class TaskUpdate(BaseModel):
     title: Optional[str] = Field(default=None, min_length=1, max_length=200)
     description: Optional[str] = Field(default=None, max_length=2000)
     completed: Optional[bool] = None
+    parent_id: Optional[int] = None
 
 
 class TaskOut(BaseModel):
@@ -54,5 +56,7 @@ class TaskOut(BaseModel):
     completed: bool
     created_at: datetime
     updated_at: datetime
+    parent_id: Optional[int]
+    progress: float
 
     model_config = ConfigDict(from_attributes=True)

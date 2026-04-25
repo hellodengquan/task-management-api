@@ -1,8 +1,28 @@
 # app/crud.py
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from . import models, schemas
 from .auth import hash_password, verify_password
+
+
+def calculate_task_progress(task: models.Task) -> float:
+    all_tasks = []
+    completed_count = 0
+
+    stack = [task]
+    while stack:
+        current = stack.pop()
+        all_tasks.append(current)
+        stack.extend(current.children)
+
+    for t in all_tasks:
+        if t.completed:
+            completed_count += 1
+
+    if len(all_tasks) == 0:
+        return 0.0
+
+    return (completed_count / len(all_tasks)) * 100.0
 
 
 # =====================
@@ -42,10 +62,16 @@ def authenticate_user(db: Session, email: str, password: str):
 # =====================
 
 def create_task(db: Session, owner_id: int, task_in: schemas.TaskCreate):
+    if task_in.parent_id is not None:
+        parent_task = get_task_with_children(db, owner_id, task_in.parent_id)
+        if not parent_task:
+            return None
+
     task = models.Task(
         title=task_in.title,
         description=task_in.description,
         owner_id=owner_id,
+        parent_id=task_in.parent_id,
     )
     db.add(task)
     db.commit()
@@ -53,13 +79,18 @@ def create_task(db: Session, owner_id: int, task_in: schemas.TaskCreate):
     return task
 
 
-def list_tasks(db: Session, owner_id: int):
-    return (
+def list_tasks(db: Session, owner_id: int, parent_id: int = None):
+    query = (
         db.query(models.Task)
         .filter(models.Task.owner_id == owner_id)
-        .order_by(models.Task.created_at.desc())
-        .all()
     )
+
+    if parent_id is None:
+        query = query.filter(models.Task.parent_id.is_(None))
+    else:
+        query = query.filter(models.Task.parent_id == parent_id)
+
+    return query.order_by(models.Task.created_at.desc()).all()
 
 
 def get_task(db: Session, owner_id: int, task_id: int):
@@ -70,10 +101,55 @@ def get_task(db: Session, owner_id: int, task_id: int):
     )
 
 
+def get_task_with_children(db: Session, owner_id: int, task_id: int):
+    return (
+        db.query(models.Task)
+        .options(joinedload(models.Task.children))
+        .filter(models.Task.owner_id == owner_id, models.Task.id == task_id)
+        .first()
+    )
+
+
+def get_all_subtasks(db: Session, owner_id: int, parent_task_id: int):
+    parent_task = get_task(db, owner_id, parent_task_id)
+    if not parent_task:
+        return None
+
+    all_subtasks = []
+    stack = [parent_task]
+    visited = {parent_task_id}
+
+    while stack:
+        current = stack.pop()
+        db.refresh(current, ['children'])
+
+        for child in current.children:
+            if child.id not in visited:
+                visited.add(child.id)
+                all_subtasks.append(child)
+                stack.append(child)
+
+    return all_subtasks
+
+
 def update_task(db: Session, owner_id: int, task_id: int, updates: schemas.TaskUpdate):
     task = get_task(db, owner_id, task_id)
     if not task:
         return None
+
+    if updates.parent_id is not None:
+        if updates.parent_id == task_id:
+            return None
+
+        parent_task = get_task(db, owner_id, updates.parent_id)
+        if not parent_task:
+            return None
+
+        all_subtasks = get_all_subtasks(db, owner_id, task_id)
+        if all_subtasks is not None:
+            for subtask in all_subtasks:
+                if subtask.id == updates.parent_id:
+                    return None
 
     if updates.title is not None:
         task.title = updates.title
@@ -81,6 +157,8 @@ def update_task(db: Session, owner_id: int, task_id: int, updates: schemas.TaskU
         task.description = updates.description
     if updates.completed is not None:
         task.completed = updates.completed
+    if updates.parent_id is not None:
+        task.parent_id = updates.parent_id
 
     db.commit()
     db.refresh(task)

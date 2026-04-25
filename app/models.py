@@ -46,5 +46,12 @@ class Task(Base):
     )
 
     owner_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    parent_id = Column(Integer, ForeignKey("tasks.id"), nullable=True)
 
     owner = relationship("User", back_populates="tasks")
+    parent = relationship("Task", back_populates="children", remote_side=[id])
+    children = relationship(
+        "Task",
+        back_populates="parent",
+        cascade="all, delete-orphan",
+    )
