@@ -30,7 +30,8 @@ def upgrade() -> None:
         sa.Column('updated_at', sa.DateTime(), nullable=False),
         sa.Column('owner_id', sa.Integer(), nullable=False),
         sa.ForeignKeyConstraint(['owner_id'], ['users.id'], ),
-        sa.PrimaryKeyConstraint('id')
+        sa.PrimaryKeyConstraint('id'),
+        sa.UniqueConstraint('owner_id', 'name', name='uq_tag_owner_name')
     )
     op.create_index(op.f('ix_tags_id'), 'tags', ['id'], unique=False)
     

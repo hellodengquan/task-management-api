@@ -1,7 +1,7 @@
 # app/models.py
 from datetime import datetime
 
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Text, Table
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Text, Table, UniqueConstraint
 from sqlalchemy.orm import relationship
 
 from .db import Base
@@ -62,6 +62,10 @@ class Tag(Base):
 
     owner = relationship("User", back_populates="tags")
     tasks = relationship("Task", secondary=task_tags, back_populates="tags")
+
+    __table_args__ = (
+        UniqueConstraint("owner_id", "name", name="uq_tag_owner_name"),
+    )
 
 
 class Task(Base):
