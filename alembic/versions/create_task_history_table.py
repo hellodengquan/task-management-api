@@ -28,15 +28,16 @@ def upgrade() -> None:
         sa.Column('action', sa.Enum('create', 'update', 'delete', name='actiontype'), nullable=False),
         sa.Column('details', sa.JSON(), nullable=True),
         sa.Column('created_at', sa.DateTime(), nullable=False),
-        sa.ForeignKeyConstraint(['task_id'], ['tasks.id'], ),
         sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
         sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_task_history_id'), 'task_history', ['id'], unique=False)
+    op.create_index(op.f('ix_task_history_task_id'), 'task_history', ['task_id'], unique=False)
 
 
 def downgrade() -> None:
     """Downgrade schema."""
+    op.drop_index(op.f('ix_task_history_task_id'), table_name='task_history')
     op.drop_index(op.f('ix_task_history_id'), table_name='task_history')
     op.drop_table('task_history')
     op.execute("DROP TYPE IF EXISTS actiontype")
