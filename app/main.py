@@ -132,3 +132,24 @@ def delete_task(
     if not ok:
         raise HTTPException(status_code=404, detail="Task not found")
     return None
+
+
+@app.get("/tasks/trees", response_model=list[schemas.TaskTree])
+def get_task_trees(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    trees = crud.get_all_task_trees(db, current_user.id)
+    return trees
+
+
+@app.get("/tasks/{task_id}/tree", response_model=schemas.TaskTree)
+def get_task_tree(
+    task_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    tree = crud.get_task_tree(db, current_user.id, task_id)
+    if not tree:
+        raise HTTPException(status_code=404, detail="Task not found")
+    return tree

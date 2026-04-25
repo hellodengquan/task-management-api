@@ -1,6 +1,6 @@
 # app/schemas.py
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List
 
 from pydantic import BaseModel, EmailStr, Field, ConfigDict
 
@@ -60,3 +60,20 @@ class TaskOut(BaseModel):
     progress: float
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class TaskTree(BaseModel):
+    id: int
+    title: str
+    description: Optional[str]
+    completed: bool
+    created_at: datetime
+    updated_at: datetime
+    parent_id: Optional[int]
+    progress: float
+    children: List["TaskTree"]
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+TaskTree.model_rebuild()

@@ -216,3 +216,70 @@ def delete_task(db: Session, owner_id: int, task_id: int) -> bool:
     db.delete(task)
     db.commit()
     return True
+
+
+def build_task_tree_recursive(
+    db: Session,
+    owner_id: int,
+    task: models.Task,
+    task_map: dict[int, models.Task]
+) -> dict:
+    db.refresh(task, ['children'])
+
+    children = []
+    for child in task.children:
+        child_tree = build_task_tree_recursive(db, owner_id, child, task_map)
+        children.append(child_tree)
+
+    return {
+        "id": task.id,
+        "title": task.title,
+        "description": task.description,
+        "completed": task.completed,
+        "created_at": task.created_at,
+        "updated_at": task.updated_at,
+        "parent_id": task.parent_id,
+        "progress": 0.0,
+        "children": children,
+    }
+
+
+def get_task_tree(db: Session, owner_id: int, task_id: int) -> Optional[dict]:
+    task = get_task(db, owner_id, task_id)
+    if not task:
+        return None
+
+    task_map = {}
+    tree = build_task_tree_recursive(db, owner_id, task, task_map)
+
+    def calculate_tree_progress(node: dict) -> float:
+        all_tasks = []
+        stack = [node]
+        while stack:
+            current = stack.pop()
+            all_tasks.append(current)
+            for child in current["children"]:
+                stack.append(child)
+
+        completed_count = sum(1 for t in all_tasks if t["completed"])
+        progress = (completed_count / len(all_tasks)) * 100.0 if all_tasks else 0.0
+        node["progress"] = progress
+        return progress
+
+    calculate_tree_progress(tree)
+    return tree
+
+
+def get_all_task_trees(db: Session, owner_id: int) -> list[dict]:
+    root_tasks = db.query(models.Task).filter(
+        models.Task.owner_id == owner_id,
+        models.Task.parent_id.is_(None)
+    ).order_by(models.Task.created_at.desc()).all()
+
+    trees = []
+    for task in root_tasks:
+        tree = get_task_tree(db, owner_id, task.id)
+        if tree:
+            trees.append(tree)
+
+    return trees

@@ -528,3 +528,193 @@ def test_task_out_includes_progress(client):
         headers=headers
     )
     assert update_response.json()["progress"] == 100.0
+
+
+def test_get_task_tree_with_nested_subtasks(client):
+    headers = register_and_login(client, "user@example.com")
+
+    grandparent_response = client.post(
+        "/tasks",
+        json={"title": "Grandparent"},
+        headers=headers
+    )
+    grandparent_id = grandparent_response.json()["id"]
+
+    parent_response = client.post(
+        "/tasks",
+        json={"title": "Parent", "parent_id": grandparent_id},
+        headers=headers
+    )
+    parent_id = parent_response.json()["id"]
+
+    child_response = client.post(
+        "/tasks",
+        json={"title": "Child", "parent_id": parent_id},
+        headers=headers
+    )
+    child_id = child_response.json()["id"]
+
+    tree_response = client.get(
+        f"/tasks/{grandparent_id}/tree",
+        headers=headers
+    )
+    assert tree_response.status_code == 200
+    tree = tree_response.json()
+
+    assert tree["id"] == grandparent_id
+    assert tree["title"] == "Grandparent"
+    assert len(tree["children"]) == 1
+
+    parent_tree = tree["children"][0]
+    assert parent_tree["id"] == parent_id
+    assert parent_tree["title"] == "Parent"
+    assert len(parent_tree["children"]) == 1
+
+    child_tree = parent_tree["children"][0]
+    assert child_tree["id"] == child_id
+    assert child_tree["title"] == "Child"
+    assert len(child_tree["children"]) == 0
+
+    assert "progress" in tree
+    assert "children" in tree
+
+
+def test_get_task_tree_progress_calculation(client):
+    headers = register_and_login(client, "user@example.com")
+
+    parent_response = client.post(
+        "/tasks",
+        json={"title": "Parent"},
+        headers=headers
+    )
+    parent_id = parent_response.json()["id"]
+
+    child1_response = client.post(
+        "/tasks",
+        json={"title": "Child 1", "parent_id": parent_id},
+        headers=headers
+    )
+    child1_id = child1_response.json()["id"]
+
+    child2_response = client.post(
+        "/tasks",
+        json={"title": "Child 2", "parent_id": parent_id},
+        headers=headers
+    )
+    child2_id = child2_response.json()["id"]
+
+    tree_response = client.get(
+        f"/tasks/{parent_id}/tree",
+        headers=headers
+    )
+    assert tree_response.json()["progress"] == 0.0
+
+    client.patch(
+        f"/tasks/{child1_id}",
+        json={"completed": True},
+        headers=headers
+    )
+
+    tree_response = client.get(
+        f"/tasks/{parent_id}/tree",
+        headers=headers
+    )
+    assert tree_response.json()["progress"] == pytest.approx(33.33, rel=1e-2)
+
+    client.patch(
+        f"/tasks/{child2_id}",
+        json={"completed": True},
+        headers=headers
+    )
+    client.patch(
+        f"/tasks/{parent_id}",
+        json={"completed": True},
+        headers=headers
+    )
+
+    tree_response = client.get(
+        f"/tasks/{parent_id}/tree",
+        headers=headers
+    )
+    assert tree_response.json()["progress"] == 100.0
+
+
+def test_get_all_task_trees(client):
+    headers = register_and_login(client, "user@example.com")
+
+    root1_response = client.post(
+        "/tasks",
+        json={"title": "Root 1"},
+        headers=headers
+    )
+    root1_id = root1_response.json()["id"]
+
+    client.post(
+        "/tasks",
+        json={"title": "Subtask of Root 1", "parent_id": root1_id},
+        headers=headers
+    )
+
+    client.post(
+        "/tasks",
+        json={"title": "Root 2"},
+        headers=headers
+    )
+
+    trees_response = client.get("/tasks/trees", headers=headers)
+    assert trees_response.status_code == 200
+    trees = trees_response.json()
+
+    assert len(trees) == 2
+    titles = [t["title"] for t in trees]
+    assert "Root 1" in titles
+    assert "Root 2" in titles
+
+    root1_tree = next(t for t in trees if t["title"] == "Root 1")
+    assert len(root1_tree["children"]) == 1
+    assert root1_tree["children"][0]["title"] == "Subtask of Root 1"
+
+    root2_tree = next(t for t in trees if t["title"] == "Root 2")
+    assert len(root2_tree["children"]) == 0
+
+
+def test_get_task_tree_requires_auth(client):
+    response = client.get("/tasks/1/tree")
+    assert response.status_code == 401
+
+
+def test_cannot_get_another_users_task_tree(client):
+    headers1 = register_and_login(client, "user1@example.com")
+    headers2 = register_and_login(client, "user2@example.com")
+
+    create_response = client.post(
+        "/tasks",
+        json={"title": "Private task"},
+        headers=headers1
+    )
+    task_id = create_response.json()["id"]
+
+    response = client.get(f"/tasks/{task_id}/tree", headers=headers2)
+    assert response.status_code == 404
+
+
+def test_get_task_trees_only_returns_own_trees(client):
+    headers1 = register_and_login(client, "user1@example.com")
+    headers2 = register_and_login(client, "user2@example.com")
+
+    client.post(
+        "/tasks",
+        json={"title": "User 1 task"},
+        headers=headers1
+    )
+    client.post(
+        "/tasks",
+        json={"title": "User 2 task"},
+        headers=headers2
+    )
+
+    response = client.get("/tasks/trees", headers=headers1)
+    assert response.status_code == 200
+    trees = response.json()
+    assert len(trees) == 1
+    assert trees[0]["title"] == "User 1 task"
