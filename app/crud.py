@@ -37,6 +37,25 @@ def authenticate_user(db: Session, email: str, password: str):
     return user
 
 
+def get_user_by_id(db: Session, user_id: int):
+    return db.query(models.User).filter(models.User.id == user_id).first()
+
+
+def list_users(db: Session):
+    return db.query(models.User).order_by(models.User.created_at.desc()).all()
+
+
+def update_user_role(db: Session, user_id: int, role: schemas.Role):
+    user = get_user_by_id(db, user_id)
+    if not user:
+        return None
+
+    user.role = role.value
+    db.commit()
+    db.refresh(user)
+    return user
+
+
 # =====================
 # TASKS
 # =====================
@@ -53,25 +72,22 @@ def create_task(db: Session, owner_id: int, task_in: schemas.TaskCreate):
     return task
 
 
-def list_tasks(db: Session, owner_id: int):
-    return (
-        db.query(models.Task)
-        .filter(models.Task.owner_id == owner_id)
-        .order_by(models.Task.created_at.desc())
-        .all()
-    )
+def list_tasks(db: Session, owner_id: int, is_admin: bool = False):
+    query = db.query(models.Task)
+    if not is_admin:
+        query = query.filter(models.Task.owner_id == owner_id)
+    return query.order_by(models.Task.created_at.desc()).all()
 
 
-def get_task(db: Session, owner_id: int, task_id: int):
-    return (
-        db.query(models.Task)
-        .filter(models.Task.owner_id == owner_id, models.Task.id == task_id)
-        .first()
-    )
+def get_task(db: Session, owner_id: int, task_id: int, is_admin: bool = False):
+    query = db.query(models.Task).filter(models.Task.id == task_id)
+    if not is_admin:
+        query = query.filter(models.Task.owner_id == owner_id)
+    return query.first()
 
 
-def update_task(db: Session, owner_id: int, task_id: int, updates: schemas.TaskUpdate):
-    task = get_task(db, owner_id, task_id)
+def update_task(db: Session, owner_id: int, task_id: int, updates: schemas.TaskUpdate, is_admin: bool = False):
+    task = get_task(db, owner_id, task_id, is_admin)
     if not task:
         return None
 
@@ -87,8 +103,8 @@ def update_task(db: Session, owner_id: int, task_id: int, updates: schemas.TaskU
     return task
 
 
-def delete_task(db: Session, owner_id: int, task_id: int) -> bool:
-    task = get_task(db, owner_id, task_id)
+def delete_task(db: Session, owner_id: int, task_id: int, is_admin: bool = False) -> bool:
+    task = get_task(db, owner_id, task_id, is_admin)
     if not task:
         return False
 

@@ -8,6 +8,7 @@ from sqlalchemy.orm import sessionmaker
 from app.db import Base
 from app.deps import get_db
 from app.main import app
+from app import models
 
 TEST_DATABASE_URL = "sqlite:///./test_task_management.db"
 
@@ -44,3 +45,42 @@ def client(db_session):
     with TestClient(app) as test_client:
         yield test_client
     app.dependency_overrides.clear()
+
+
+def register_and_login(client, email, password="password123"):
+    client.post("/auth/register", json={"email": email, "password": password})
+
+    login_response = client.post(
+        "/auth/login",
+        data={"username": email, "password": password}
+    )
+
+    token = login_response.json()["access_token"]
+    return {"Authorization": f"Bearer {token}"}
+
+
+def register_login_and_make_admin(client, db_session, email, password="password123"):
+    client.post("/auth/register", json={"email": email, "password": password})
+    
+    user = db_session.query(models.User).filter(models.User.email == email).first()
+    user.role = models.Role.ADMIN
+    db_session.commit()
+    db_session.refresh(user)
+
+    login_response = client.post(
+        "/auth/login",
+        data={"username": email, "password": password}
+    )
+
+    token = login_response.json()["access_token"]
+    return {"Authorization": f"Bearer {token}"}
+
+
+@pytest.fixture(scope="function")
+def admin_headers(client, db_session):
+    return register_login_and_make_admin(client, db_session, "admin@example.com")
+
+
+@pytest.fixture(scope="function")
+def member_headers(client):
+    return register_and_login(client, "member@example.com")

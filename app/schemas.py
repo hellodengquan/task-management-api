@@ -1,8 +1,14 @@
 # app/schemas.py
 from datetime import datetime
+from enum import Enum
 from typing import Optional
 
 from pydantic import BaseModel, EmailStr, Field, ConfigDict
+
+
+class Role(str, Enum):
+    ADMIN = "admin"
+    MEMBER = "member"
 
 
 # =====================
@@ -17,10 +23,15 @@ class UserCreate(BaseModel):
 class UserOut(BaseModel):
     id: int
     email: EmailStr
+    role: Role
     created_at: datetime
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class UserRoleUpdate(BaseModel):
+    role: Role
 
 
 # =====================

@@ -4,8 +4,9 @@ from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
 from . import models, schemas, crud
-from .deps import get_db, get_current_user
+from .deps import get_db, get_current_user, get_current_admin_user
 from .auth import create_access_token
+from .models import Role
 
 app = FastAPI(title="Task Management API")
 
@@ -33,8 +34,8 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
 
-    # Put user id in "sub" (subject)
-    token = create_access_token({"sub": str(user.id)})
+    # Put user id in "sub" (subject) and role in token
+    token = create_access_token({"sub": str(user.id), "role": user.role.value})
     return {"access_token": token, "token_type": "bearer"}
 
 
@@ -56,7 +57,8 @@ def get_tasks(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    return crud.list_tasks(db, current_user.id)
+    is_admin = current_user.role == Role.ADMIN
+    return crud.list_tasks(db, current_user.id, is_admin=is_admin)
 
 
 @app.get("/tasks/{task_id}", response_model=schemas.TaskOut)
@@ -65,7 +67,8 @@ def get_task(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    task = crud.get_task(db, current_user.id, task_id)
+    is_admin = current_user.role == Role.ADMIN
+    task = crud.get_task(db, current_user.id, task_id, is_admin=is_admin)
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
     return task
@@ -78,7 +81,8 @@ def patch_task(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    task = crud.update_task(db, current_user.id, task_id, updates)
+    is_admin = current_user.role == Role.ADMIN
+    task = crud.update_task(db, current_user.id, task_id, updates, is_admin=is_admin)
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
     return task
@@ -90,7 +94,45 @@ def delete_task(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    ok = crud.delete_task(db, current_user.id, task_id)
+    is_admin = current_user.role == Role.ADMIN
+    ok = crud.delete_task(db, current_user.id, task_id, is_admin=is_admin)
     if not ok:
         raise HTTPException(status_code=404, detail="Task not found")
     return None
+
+
+# =====================
+# USERS (ADMIN ONLY)
+# =====================
+
+@app.get("/users", response_model=list[schemas.UserOut])
+def get_users(
+    db: Session = Depends(get_db),
+    _: models.User = Depends(get_current_admin_user),
+):
+    return crud.list_users(db)
+
+
+@app.get("/users/{user_id}", response_model=schemas.UserOut)
+def get_user(
+    user_id: int,
+    db: Session = Depends(get_db),
+    _: models.User = Depends(get_current_admin_user),
+):
+    user = crud.get_user_by_id(db, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return user
+
+
+@app.patch("/users/{user_id}/role", response_model=schemas.UserOut)
+def update_user_role(
+    user_id: int,
+    role_update: schemas.UserRoleUpdate,
+    db: Session = Depends(get_db),
+    _: models.User = Depends(get_current_admin_user),
+):
+    user = crud.update_user_role(db, user_id, role_update.role)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return user
