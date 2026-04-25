@@ -5,15 +5,17 @@ from . import models, schemas
 from .auth import hash_password, verify_password
 
 
-def calculate_task_progress(task: models.Task) -> float:
+def calculate_task_progress(db: Session, task: models.Task) -> float:
     all_tasks = []
     completed_count = 0
 
     stack = [task]
     while stack:
         current = stack.pop()
+        db.refresh(current, ['children'])
         all_tasks.append(current)
-        stack.extend(current.children)
+        for child in current.children:
+            stack.append(child)
 
     for t in all_tasks:
         if t.completed:
@@ -63,7 +65,7 @@ def authenticate_user(db: Session, email: str, password: str):
 
 def create_task(db: Session, owner_id: int, task_in: schemas.TaskCreate):
     if task_in.parent_id is not None:
-        parent_task = get_task_with_children(db, owner_id, task_in.parent_id)
+        parent_task = get_task(db, owner_id, task_in.parent_id)
         if not parent_task:
             return None
 
@@ -85,9 +87,7 @@ def list_tasks(db: Session, owner_id: int, parent_id: int = None):
         .filter(models.Task.owner_id == owner_id)
     )
 
-    if parent_id is None:
-        query = query.filter(models.Task.parent_id.is_(None))
-    else:
+    if parent_id is not None:
         query = query.filter(models.Task.parent_id == parent_id)
 
     return query.order_by(models.Task.created_at.desc()).all()

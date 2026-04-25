@@ -495,8 +495,8 @@ def test_list_tasks_with_parent_id_filter(client):
         headers=headers
     )
 
-    root_tasks = client.get("/tasks", headers=headers)
-    assert len(root_tasks.json()) == 2
+    all_tasks = client.get("/tasks", headers=headers)
+    assert len(all_tasks.json()) == 3
 
     subtasks = client.get(f"/tasks?parent_id={root2_id}", headers=headers)
     assert len(subtasks.json()) == 1

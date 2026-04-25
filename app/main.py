@@ -13,8 +13,7 @@ app = FastAPI(title="Task Management API")
 
 
 def task_to_out(task: models.Task, db: Session) -> schemas.TaskOut:
-    task_with_children = crud.get_task_with_children(db, task.owner_id, task.id)
-    progress = crud.calculate_task_progress(task_with_children)
+    progress = crud.calculate_task_progress(db, task)
     return schemas.TaskOut(
         id=task.id,
         title=task.title,
