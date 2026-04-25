@@ -69,7 +69,7 @@ def test_create_duplicate_tag_name(client):
         headers=headers
     )
 
-    assert response.status_code == 400
+    assert response.status_code == 409
 
 
 def test_create_tag_with_invalid_color(client):

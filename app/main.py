@@ -50,7 +50,7 @@ def create_tag(
 ):
     tag = crud.create_tag(db, current_user.id, tag_in)
     if not tag:
-        raise HTTPException(status_code=400, detail=f"Tag with name '{tag_in.name}' already exists")
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f"Tag with name '{tag_in.name}' already exists")
     return tag
 
 
@@ -86,7 +86,7 @@ def patch_tag(
         tag_check = crud.get_tag(db, current_user.id, tag_id)
         if not tag_check:
             raise HTTPException(status_code=404, detail="Tag not found")
-        raise HTTPException(status_code=400, detail="Tag with this name already exists")
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Tag with this name already exists")
     return tag
 
 
