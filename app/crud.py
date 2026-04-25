@@ -1,4 +1,6 @@
 # app/crud.py
+from typing import Optional
+
 from sqlalchemy.orm import Session, joinedload
 
 from . import models, schemas
@@ -25,6 +27,58 @@ def calculate_task_progress(db: Session, task: models.Task) -> float:
         return 0.0
 
     return (completed_count / len(all_tasks)) * 100.0
+
+
+def would_create_cycle(
+    db: Session,
+    owner_id: int,
+    task_id: int,
+    new_parent_id: int
+) -> bool:
+    if new_parent_id == task_id:
+        return True
+
+    current_id = new_parent_id
+    visited = {new_parent_id}
+
+    while current_id is not None:
+        current_task = get_task(db, owner_id, current_id)
+        if not current_task:
+            return False
+
+        if current_task.id == task_id:
+            return True
+
+        if current_task.parent_id is None:
+            return False
+
+        if current_task.parent_id in visited:
+            return True
+
+        visited.add(current_task.parent_id)
+        current_id = current_task.parent_id
+
+    return False
+
+
+def validate_parent_id(
+    db: Session,
+    owner_id: int,
+    parent_id: Optional[int],
+    task_id: Optional[int] = None
+) -> bool:
+    if parent_id is None:
+        return True
+
+    parent_task = get_task(db, owner_id, parent_id)
+    if not parent_task:
+        return False
+
+    if task_id is not None:
+        if would_create_cycle(db, owner_id, task_id, parent_id):
+            return False
+
+    return True
 
 
 # =====================
@@ -65,8 +119,7 @@ def authenticate_user(db: Session, email: str, password: str):
 
 def create_task(db: Session, owner_id: int, task_in: schemas.TaskCreate):
     if task_in.parent_id is not None:
-        parent_task = get_task(db, owner_id, task_in.parent_id)
-        if not parent_task:
+        if not validate_parent_id(db, owner_id, task_in.parent_id):
             return None
 
     task = models.Task(
@@ -138,18 +191,8 @@ def update_task(db: Session, owner_id: int, task_id: int, updates: schemas.TaskU
         return None
 
     if updates.parent_id is not None:
-        if updates.parent_id == task_id:
+        if not validate_parent_id(db, owner_id, updates.parent_id, task_id):
             return None
-
-        parent_task = get_task(db, owner_id, updates.parent_id)
-        if not parent_task:
-            return None
-
-        all_subtasks = get_all_subtasks(db, owner_id, task_id)
-        if all_subtasks is not None:
-            for subtask in all_subtasks:
-                if subtask.id == updates.parent_id:
-                    return None
 
     if updates.title is not None:
         task.title = updates.title
