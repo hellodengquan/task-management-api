@@ -93,10 +93,69 @@ def get_recurrence_plan(db: Session, owner_id: int, plan_id: int):
     )
 
 
+def _get_week_days_list(plan: models.RecurrencePlan) -> Optional[List[int]]:
+    """Get week_days from plan as a list of integers."""
+    if plan.week_days is None:
+        return None
+    
+    if isinstance(plan.week_days, list):
+        return [int(d) for d in plan.week_days if d is not None]
+    
+    if isinstance(plan.week_days, str):
+        return [int(d) for d in plan.week_days.split(',') if d]
+    
+    return None
+
+
+def _get_month_days_list(plan: models.RecurrencePlan) -> Optional[List[int]]:
+    """Get month_days from plan as a list of integers."""
+    if plan.month_days is None:
+        return None
+    
+    if isinstance(plan.month_days, list):
+        return [int(d) for d in plan.month_days if d is not None]
+    
+    if isinstance(plan.month_days, str):
+        return [int(d) for d in plan.month_days.split(',') if d]
+    
+    return None
+
+
+def _validate_field_consistency(
+    new_frequency: models.RecurrenceFrequency,
+    week_days: Optional[List[int]],
+    month_days: Optional[List[int]],
+) -> None:
+    """
+    Validate that fields are consistent with the frequency.
+    Raises ValueError if inconsistent.
+    """
+    if week_days is not None:
+        for day in week_days:
+            if day < 0 or day > 6:
+                raise ValueError(f"week_days must be between 0 and 6, got {day}")
+    
+    if month_days is not None:
+        for day in month_days:
+            if day < 1 or day > 31:
+                raise ValueError(f"month_days must be between 1 and 31, got {day}")
+    
+    if new_frequency == models.RecurrenceFrequency.WEEKLY:
+        if week_days is None or len(week_days) == 0:
+            raise ValueError("week_days is required for weekly frequency")
+    
+    elif new_frequency == models.RecurrenceFrequency.MONTHLY:
+        if month_days is None or len(month_days) == 0:
+            raise ValueError("month_days is required for monthly frequency")
+
+
 def update_recurrence_plan(db: Session, owner_id: int, plan_id: int, updates: schemas.RecurrencePlanUpdate):
     plan = get_recurrence_plan(db, owner_id, plan_id)
     if not plan:
         return None
+
+    old_frequency = plan.frequency
+    new_frequency = updates.frequency if updates.frequency is not None else old_frequency
 
     if updates.frequency is not None:
         plan.frequency = updates.frequency
@@ -110,6 +169,24 @@ def update_recurrence_plan(db: Session, owner_id: int, plan_id: int, updates: sc
         plan.end_date = updates.end_date
     if updates.is_active is not None:
         plan.is_active = updates.is_active
+
+    if old_frequency != new_frequency:
+        current_week_days = _get_week_days_list(plan)
+        current_month_days = _get_month_days_list(plan)
+        
+        _validate_field_consistency(new_frequency, current_week_days, current_month_days)
+        
+        if new_frequency == models.RecurrenceFrequency.WEEKLY:
+            plan.month_days = None
+        
+        elif new_frequency == models.RecurrenceFrequency.MONTHLY:
+            plan.week_days = None
+        
+        elif new_frequency in [models.RecurrenceFrequency.DAILY, models.RecurrenceFrequency.YEARLY]:
+            plan.week_days = None
+            plan.month_days = None
+        
+        db.flush()
 
     db.commit()
     db.refresh(plan)

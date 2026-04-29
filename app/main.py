@@ -144,7 +144,11 @@ def patch_recurrence_plan(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    plan = crud.update_recurrence_plan(db, current_user.id, plan_id, updates)
+    try:
+        plan = crud.update_recurrence_plan(db, current_user.id, plan_id, updates)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    
     if not plan:
         raise HTTPException(status_code=404, detail="Recurrence plan not found")
     return plan

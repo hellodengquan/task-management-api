@@ -52,7 +52,15 @@ def _validate_recurrence_fields(
 ) -> None:
     """
     Validate recurrence fields based on frequency.
-    For updates, only validate if frequency is provided.
+    
+    For creates:
+    - weekly: requires week_days (0-6), rejects month_days
+    - monthly: requires month_days (1-31), rejects week_days
+    - daily/yearly: rejects both week_days and month_days
+    
+    For updates:
+    - If frequency is changing, validate that request doesn't contain mismatched fields
+    - If frequency is not provided, don't validate fields (frequency may not be changing)
     """
     if frequency is None:
         return
@@ -124,20 +132,27 @@ class RecurrencePlanOut(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
-    @model_validator(mode='before')
+    @field_validator('week_days', mode='before')
     @classmethod
-    def convert_comma_strings(cls, data: Any) -> Any:
-        if isinstance(data, dict):
-            if data.get('week_days') and isinstance(data['week_days'], str):
-                data['week_days'] = [int(d) for d in data['week_days'].split(',') if d]
-            if data.get('month_days') and isinstance(data['month_days'], str):
-                data['month_days'] = [int(d) for d in data['month_days'].split(',') if d]
-        else:
-            if hasattr(data, 'week_days') and data.week_days and isinstance(data.week_days, str):
-                data.week_days = [int(d) for d in data.week_days.split(',') if d]
-            if hasattr(data, 'month_days') and data.month_days and isinstance(data.month_days, str):
-                data.month_days = [int(d) for d in data.month_days.split(',') if d]
-        return data
+    def convert_week_days(cls, v: Any) -> Optional[List[int]]:
+        if v is None:
+            return None
+        if isinstance(v, list):
+            return [int(d) for d in v if d is not None]
+        if isinstance(v, str):
+            return [int(d) for d in v.split(',') if d]
+        return None
+
+    @field_validator('month_days', mode='before')
+    @classmethod
+    def convert_month_days(cls, v: Any) -> Optional[List[int]]:
+        if v is None:
+            return None
+        if isinstance(v, list):
+            return [int(d) for d in v if d is not None]
+        if isinstance(v, str):
+            return [int(d) for d in v.split(',') if d]
+        return None
 
 
 # =====================

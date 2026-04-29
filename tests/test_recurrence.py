@@ -752,3 +752,474 @@ def test_skip_occurrence_stored_at_start_of_day(client):
     assert stored_date.minute == 0
     assert stored_date.second == 0
     assert stored_date.microsecond == 0
+
+
+# =====================
+# FREQUENCY SWITCH TESTS
+# =====================
+
+def test_switch_daily_to_weekly_success(client):
+    headers = register_and_login(client, "user1@example.com")
+
+    create_response = client.post(
+        "/recurrence-plans",
+        json={
+            "frequency": "daily",
+            "interval": 1,
+            "is_active": True
+        },
+        headers=headers
+    )
+    plan_id = create_response.json()["id"]
+
+    switch_response = client.patch(
+        f"/recurrence-plans/{plan_id}",
+        json={
+            "frequency": "weekly",
+            "week_days": [0, 2, 4]
+        },
+        headers=headers
+    )
+
+    assert switch_response.status_code == 200
+    data = switch_response.json()
+    assert data["frequency"] == "weekly"
+    assert data["week_days"] == [0, 2, 4]
+    assert data["month_days"] is None
+
+
+def test_switch_daily_to_weekly_missing_week_days(client):
+    headers = register_and_login(client, "user1@example.com")
+
+    create_response = client.post(
+        "/recurrence-plans",
+        json={
+            "frequency": "daily",
+            "interval": 1,
+            "is_active": True
+        },
+        headers=headers
+    )
+    plan_id = create_response.json()["id"]
+
+    switch_response = client.patch(
+        f"/recurrence-plans/{plan_id}",
+        json={
+            "frequency": "weekly"
+        },
+        headers=headers
+    )
+
+    assert switch_response.status_code == 422
+    assert "week_days is required for weekly frequency" in switch_response.json()["detail"]
+
+
+def test_switch_daily_to_weekly_with_month_days(client):
+    headers = register_and_login(client, "user1@example.com")
+
+    create_response = client.post(
+        "/recurrence-plans",
+        json={
+            "frequency": "daily",
+            "interval": 1,
+            "is_active": True
+        },
+        headers=headers
+    )
+    plan_id = create_response.json()["id"]
+
+    switch_response = client.patch(
+        f"/recurrence-plans/{plan_id}",
+        json={
+            "frequency": "weekly",
+            "week_days": [0],
+            "month_days": [1]
+        },
+        headers=headers
+    )
+
+    assert switch_response.status_code == 422
+    assert "month_days is not allowed for weekly frequency" in switch_response.json()["detail"][0]["msg"]
+
+
+def test_switch_daily_to_monthly_success(client):
+    headers = register_and_login(client, "user1@example.com")
+
+    create_response = client.post(
+        "/recurrence-plans",
+        json={
+            "frequency": "daily",
+            "interval": 1,
+            "is_active": True
+        },
+        headers=headers
+    )
+    plan_id = create_response.json()["id"]
+
+    switch_response = client.patch(
+        f"/recurrence-plans/{plan_id}",
+        json={
+            "frequency": "monthly",
+            "month_days": [1, 15]
+        },
+        headers=headers
+    )
+
+    assert switch_response.status_code == 200
+    data = switch_response.json()
+    assert data["frequency"] == "monthly"
+    assert data["month_days"] == [1, 15]
+    assert data["week_days"] is None
+
+
+def test_switch_daily_to_monthly_missing_month_days(client):
+    headers = register_and_login(client, "user1@example.com")
+
+    create_response = client.post(
+        "/recurrence-plans",
+        json={
+            "frequency": "daily",
+            "interval": 1,
+            "is_active": True
+        },
+        headers=headers
+    )
+    plan_id = create_response.json()["id"]
+
+    switch_response = client.patch(
+        f"/recurrence-plans/{plan_id}",
+        json={
+            "frequency": "monthly"
+        },
+        headers=headers
+    )
+
+    assert switch_response.status_code == 422
+    assert "month_days is required for monthly frequency" in switch_response.json()["detail"]
+
+
+def test_switch_daily_to_monthly_with_week_days(client):
+    headers = register_and_login(client, "user1@example.com")
+
+    create_response = client.post(
+        "/recurrence-plans",
+        json={
+            "frequency": "daily",
+            "interval": 1,
+            "is_active": True
+        },
+        headers=headers
+    )
+    plan_id = create_response.json()["id"]
+
+    switch_response = client.patch(
+        f"/recurrence-plans/{plan_id}",
+        json={
+            "frequency": "monthly",
+            "week_days": [0],
+            "month_days": [1]
+        },
+        headers=headers
+    )
+
+    assert switch_response.status_code == 422
+    assert "week_days is not allowed for monthly frequency" in switch_response.json()["detail"][0]["msg"]
+
+
+def test_switch_daily_to_yearly_success(client):
+    headers = register_and_login(client, "user1@example.com")
+
+    create_response = client.post(
+        "/recurrence-plans",
+        json={
+            "frequency": "daily",
+            "interval": 1,
+            "is_active": True
+        },
+        headers=headers
+    )
+    plan_id = create_response.json()["id"]
+
+    switch_response = client.patch(
+        f"/recurrence-plans/{plan_id}",
+        json={
+            "frequency": "yearly"
+        },
+        headers=headers
+    )
+
+    assert switch_response.status_code == 200
+    data = switch_response.json()
+    assert data["frequency"] == "yearly"
+    assert data["week_days"] is None
+    assert data["month_days"] is None
+
+
+def test_switch_daily_to_yearly_with_week_days(client):
+    headers = register_and_login(client, "user1@example.com")
+
+    create_response = client.post(
+        "/recurrence-plans",
+        json={
+            "frequency": "daily",
+            "interval": 1,
+            "is_active": True
+        },
+        headers=headers
+    )
+    plan_id = create_response.json()["id"]
+
+    switch_response = client.patch(
+        f"/recurrence-plans/{plan_id}",
+        json={
+            "frequency": "yearly",
+            "week_days": [0]
+        },
+        headers=headers
+    )
+
+    assert switch_response.status_code == 422
+    assert "week_days is not allowed for yearly frequency" in switch_response.json()["detail"][0]["msg"]
+
+
+def test_switch_weekly_to_daily_success(client):
+    headers = register_and_login(client, "user1@example.com")
+
+    create_response = client.post(
+        "/recurrence-plans",
+        json={
+            "frequency": "weekly",
+            "interval": 1,
+            "week_days": [0, 2, 4],
+            "is_active": True
+        },
+        headers=headers
+    )
+    plan_id = create_response.json()["id"]
+
+    switch_response = client.patch(
+        f"/recurrence-plans/{plan_id}",
+        json={
+            "frequency": "daily"
+        },
+        headers=headers
+    )
+
+    assert switch_response.status_code == 200
+    data = switch_response.json()
+    assert data["frequency"] == "daily"
+    assert data["week_days"] is None
+    assert data["month_days"] is None
+
+
+def test_switch_weekly_to_monthly_success(client):
+    headers = register_and_login(client, "user1@example.com")
+
+    create_response = client.post(
+        "/recurrence-plans",
+        json={
+            "frequency": "weekly",
+            "interval": 1,
+            "week_days": [0, 2, 4],
+            "is_active": True
+        },
+        headers=headers
+    )
+    plan_id = create_response.json()["id"]
+
+    switch_response = client.patch(
+        f"/recurrence-plans/{plan_id}",
+        json={
+            "frequency": "monthly",
+            "month_days": [1, 15]
+        },
+        headers=headers
+    )
+
+    assert switch_response.status_code == 200
+    data = switch_response.json()
+    assert data["frequency"] == "monthly"
+    assert data["week_days"] is None
+    assert data["month_days"] == [1, 15]
+
+
+def test_switch_weekly_to_monthly_with_week_days(client):
+    headers = register_and_login(client, "user1@example.com")
+
+    create_response = client.post(
+        "/recurrence-plans",
+        json={
+            "frequency": "weekly",
+            "interval": 1,
+            "week_days": [0, 2, 4],
+            "is_active": True
+        },
+        headers=headers
+    )
+    plan_id = create_response.json()["id"]
+
+    switch_response = client.patch(
+        f"/recurrence-plans/{plan_id}",
+        json={
+            "frequency": "monthly",
+            "week_days": [1],
+            "month_days": [1]
+        },
+        headers=headers
+    )
+
+    assert switch_response.status_code == 422
+    assert "week_days is not allowed for monthly frequency" in switch_response.json()["detail"][0]["msg"]
+
+
+def test_switch_monthly_to_weekly_success(client):
+    headers = register_and_login(client, "user1@example.com")
+
+    create_response = client.post(
+        "/recurrence-plans",
+        json={
+            "frequency": "monthly",
+            "interval": 1,
+            "month_days": [1, 15],
+            "is_active": True
+        },
+        headers=headers
+    )
+    plan_id = create_response.json()["id"]
+
+    switch_response = client.patch(
+        f"/recurrence-plans/{plan_id}",
+        json={
+            "frequency": "weekly",
+            "week_days": [0, 2, 4]
+        },
+        headers=headers
+    )
+
+    assert switch_response.status_code == 200
+    data = switch_response.json()
+    assert data["frequency"] == "weekly"
+    assert data["week_days"] == [0, 2, 4]
+    assert data["month_days"] is None
+
+
+def test_switch_monthly_to_daily_success(client):
+    headers = register_and_login(client, "user1@example.com")
+
+    create_response = client.post(
+        "/recurrence-plans",
+        json={
+            "frequency": "monthly",
+            "interval": 1,
+            "month_days": [1, 15],
+            "is_active": True
+        },
+        headers=headers
+    )
+    plan_id = create_response.json()["id"]
+
+    switch_response = client.patch(
+        f"/recurrence-plans/{plan_id}",
+        json={
+            "frequency": "daily"
+        },
+        headers=headers
+    )
+
+    assert switch_response.status_code == 200
+    data = switch_response.json()
+    assert data["frequency"] == "daily"
+    assert data["week_days"] is None
+    assert data["month_days"] is None
+
+
+def test_switch_yearly_to_weekly_success(client):
+    headers = register_and_login(client, "user1@example.com")
+
+    create_response = client.post(
+        "/recurrence-plans",
+        json={
+            "frequency": "yearly",
+            "interval": 1,
+            "is_active": True
+        },
+        headers=headers
+    )
+    plan_id = create_response.json()["id"]
+
+    switch_response = client.patch(
+        f"/recurrence-plans/{plan_id}",
+        json={
+            "frequency": "weekly",
+            "week_days": [0, 2, 4]
+        },
+        headers=headers
+    )
+
+    assert switch_response.status_code == 200
+    data = switch_response.json()
+    assert data["frequency"] == "weekly"
+    assert data["week_days"] == [0, 2, 4]
+    assert data["month_days"] is None
+
+
+def test_update_weekly_without_changing_frequency(client):
+    headers = register_and_login(client, "user1@example.com")
+
+    create_response = client.post(
+        "/recurrence-plans",
+        json={
+            "frequency": "weekly",
+            "interval": 1,
+            "week_days": [0, 2, 4],
+            "is_active": True
+        },
+        headers=headers
+    )
+    plan_id = create_response.json()["id"]
+
+    update_response = client.patch(
+        f"/recurrence-plans/{plan_id}",
+        json={
+            "interval": 2,
+            "week_days": [1, 3, 5]
+        },
+        headers=headers
+    )
+
+    assert update_response.status_code == 200
+    data = update_response.json()
+    assert data["frequency"] == "weekly"
+    assert data["interval"] == 2
+    assert data["week_days"] == [1, 3, 5]
+
+
+def test_update_monthly_without_changing_frequency(client):
+    headers = register_and_login(client, "user1@example.com")
+
+    create_response = client.post(
+        "/recurrence-plans",
+        json={
+            "frequency": "monthly",
+            "interval": 1,
+            "month_days": [1, 15],
+            "is_active": True
+        },
+        headers=headers
+    )
+    plan_id = create_response.json()["id"]
+
+    update_response = client.patch(
+        f"/recurrence-plans/{plan_id}",
+        json={
+            "interval": 2,
+            "month_days": [1, 10, 20]
+        },
+        headers=headers
+    )
+
+    assert update_response.status_code == 200
+    data = update_response.json()
+    assert data["frequency"] == "monthly"
+    assert data["interval"] == 2
+    assert data["month_days"] == [1, 10, 20]
