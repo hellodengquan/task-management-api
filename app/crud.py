@@ -1,8 +1,27 @@
 # app/crud.py
+from datetime import datetime
+from typing import List, Optional
+
 from sqlalchemy.orm import Session
 
 from . import models, schemas
 from .auth import hash_password, verify_password
+
+
+# =====================
+# UTILITY FUNCTIONS
+# =====================
+
+def list_to_comma_string(lst: Optional[List[int]]) -> Optional[str]:
+    if lst is None:
+        return None
+    return ','.join(str(d) for d in lst) if lst else None
+
+
+def comma_string_to_list(s: Optional[str]) -> Optional[List[int]]:
+    if s is None:
+        return None
+    return [int(d) for d in s.split(',') if d] if s else None
 
 
 # =====================
@@ -38,6 +57,112 @@ def authenticate_user(db: Session, email: str, password: str):
 
 
 # =====================
+# RECURRENCE PLANS
+# =====================
+
+def create_recurrence_plan(db: Session, owner_id: int, plan_in: schemas.RecurrencePlanCreate):
+    plan = models.RecurrencePlan(
+        frequency=plan_in.frequency,
+        interval=plan_in.interval,
+        week_days=list_to_comma_string(plan_in.week_days),
+        month_days=list_to_comma_string(plan_in.month_days),
+        end_date=plan_in.end_date,
+        is_active=plan_in.is_active,
+        owner_id=owner_id,
+    )
+    db.add(plan)
+    db.commit()
+    db.refresh(plan)
+    return plan
+
+
+def list_recurrence_plans(db: Session, owner_id: int):
+    return (
+        db.query(models.RecurrencePlan)
+        .filter(models.RecurrencePlan.owner_id == owner_id)
+        .order_by(models.RecurrencePlan.created_at.desc())
+        .all()
+    )
+
+
+def get_recurrence_plan(db: Session, owner_id: int, plan_id: int):
+    return (
+        db.query(models.RecurrencePlan)
+        .filter(models.RecurrencePlan.owner_id == owner_id, models.RecurrencePlan.id == plan_id)
+        .first()
+    )
+
+
+def update_recurrence_plan(db: Session, owner_id: int, plan_id: int, updates: schemas.RecurrencePlanUpdate):
+    plan = get_recurrence_plan(db, owner_id, plan_id)
+    if not plan:
+        return None
+
+    if updates.frequency is not None:
+        plan.frequency = updates.frequency
+    if updates.interval is not None:
+        plan.interval = updates.interval
+    if updates.week_days is not None:
+        plan.week_days = list_to_comma_string(updates.week_days)
+    if updates.month_days is not None:
+        plan.month_days = list_to_comma_string(updates.month_days)
+    if updates.end_date is not None:
+        plan.end_date = updates.end_date
+    if updates.is_active is not None:
+        plan.is_active = updates.is_active
+
+    db.commit()
+    db.refresh(plan)
+    return plan
+
+
+def delete_recurrence_plan(db: Session, owner_id: int, plan_id: int) -> bool:
+    plan = get_recurrence_plan(db, owner_id, plan_id)
+    if not plan:
+        return False
+
+    db.delete(plan)
+    db.commit()
+    return True
+
+
+# =====================
+# SKIPPED OCCURRENCES
+# =====================
+
+def create_skipped_occurrence(db: Session, plan_id: int, occurrence_in: schemas.SkippedOccurrenceCreate):
+    skipped = models.SkippedOccurrence(
+        recurrence_plan_id=plan_id,
+        occurrence_date=occurrence_in.occurrence_date,
+        reason=occurrence_in.reason,
+    )
+    db.add(skipped)
+    db.commit()
+    db.refresh(skipped)
+    return skipped
+
+
+def list_skipped_occurrences(db: Session, plan_id: int):
+    return (
+        db.query(models.SkippedOccurrence)
+        .filter(models.SkippedOccurrence.recurrence_plan_id == plan_id)
+        .order_by(models.SkippedOccurrence.occurrence_date.desc())
+        .all()
+    )
+
+
+def is_occurrence_skipped(db: Session, plan_id: int, occurrence_date: datetime) -> bool:
+    return (
+        db.query(models.SkippedOccurrence)
+        .filter(
+            models.SkippedOccurrence.recurrence_plan_id == plan_id,
+            models.SkippedOccurrence.occurrence_date == occurrence_date
+        )
+        .first() is not None
+    )
+
+
+# =====================
 # TASKS
 # =====================
 
@@ -45,6 +170,8 @@ def create_task(db: Session, owner_id: int, task_in: schemas.TaskCreate):
     task = models.Task(
         title=task_in.title,
         description=task_in.description,
+        due_date=task_in.due_date,
+        recurrence_plan_id=task_in.recurrence_plan_id,
         owner_id=owner_id,
     )
     db.add(task)
@@ -81,6 +208,8 @@ def update_task(db: Session, owner_id: int, task_id: int, updates: schemas.TaskU
         task.description = updates.description
     if updates.completed is not None:
         task.completed = updates.completed
+    if updates.due_date is not None:
+        task.due_date = updates.due_date
 
     db.commit()
     db.refresh(task)
