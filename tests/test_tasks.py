@@ -277,6 +277,56 @@ def test_update_task_status(client):
     assert data["completed"] is True
 
 
+def test_update_task_status_from_completed_to_pending(client):
+    headers = register_and_login(client, "user1@example.com")
+
+    create_response = client.post(
+        "/tasks",
+        json={"title": "Test task", "status": "completed"},
+        headers=headers
+    )
+
+    task_id = create_response.json()["id"]
+    assert create_response.json()["completed"] is True
+
+    response = client.patch(
+        f"/tasks/{task_id}",
+        json={"status": "pending"},
+        headers=headers
+    )
+
+    assert response.status_code == 200
+
+    data = response.json()
+    assert data["status"] == "pending"
+    assert data["completed"] is False
+
+
+def test_update_task_status_from_completed_to_in_progress(client):
+    headers = register_and_login(client, "user1@example.com")
+
+    create_response = client.post(
+        "/tasks",
+        json={"title": "Test task", "status": "completed"},
+        headers=headers
+    )
+
+    task_id = create_response.json()["id"]
+    assert create_response.json()["completed"] is True
+
+    response = client.patch(
+        f"/tasks/{task_id}",
+        json={"status": "in_progress"},
+        headers=headers
+    )
+
+    assert response.status_code == 200
+
+    data = response.json()
+    assert data["status"] == "in_progress"
+    assert data["completed"] is False
+
+
 def test_update_task_priority(client):
     headers = register_and_login(client, "user1@example.com")
 
@@ -459,6 +509,70 @@ def test_batch_update_with_invalid_assignee(client):
     for failure in data["failures"]:
         assert failure["success"] is False
         assert "Assignee not found" in failure["detail"]
+
+
+def test_batch_update_status_from_completed_to_pending(client):
+    headers = register_and_login(client, "user1@example.com")
+
+    task1 = client.post("/tasks", json={"title": "Task 1", "status": "completed"}, headers=headers)
+    task2 = client.post("/tasks", json={"title": "Task 2", "status": "completed"}, headers=headers)
+
+    assert task1.json()["completed"] is True
+    assert task2.json()["completed"] is True
+
+    task_ids = [task1.json()["id"], task2.json()["id"]]
+
+    response = client.post(
+        "/tasks/batch/update",
+        json={
+            "task_ids": task_ids,
+            "updates": {"status": "pending"}
+        },
+        headers=headers
+    )
+
+    assert response.status_code == 200
+
+    data = response.json()
+    assert data["total"] == 2
+    assert data["success_count"] == 2
+    assert data["failure_count"] == 0
+
+    for task in data["successes"]:
+        assert task["status"] == "pending"
+        assert task["completed"] is False
+
+
+def test_batch_update_status_from_completed_to_in_progress(client):
+    headers = register_and_login(client, "user1@example.com")
+
+    task1 = client.post("/tasks", json={"title": "Task 1", "status": "completed"}, headers=headers)
+    task2 = client.post("/tasks", json={"title": "Task 2", "status": "completed"}, headers=headers)
+
+    assert task1.json()["completed"] is True
+    assert task2.json()["completed"] is True
+
+    task_ids = [task1.json()["id"], task2.json()["id"]]
+
+    response = client.post(
+        "/tasks/batch/update",
+        json={
+            "task_ids": task_ids,
+            "updates": {"status": "in_progress"}
+        },
+        headers=headers
+    )
+
+    assert response.status_code == 200
+
+    data = response.json()
+    assert data["total"] == 2
+    assert data["success_count"] == 2
+    assert data["failure_count"] == 0
+
+    for task in data["successes"]:
+        assert task["status"] == "in_progress"
+        assert task["completed"] is False
 
 
 def test_batch_update_with_empty_task_ids(client):

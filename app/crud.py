@@ -116,6 +116,8 @@ def update_task(db: Session, owner_id: int, task_id: int, updates: schemas.TaskU
         task.status = updates.status
         if updates.status == TaskStatus.COMPLETED:
             task.completed = True
+        else:
+            task.completed = False
     if updates.priority is not None:
         task.priority = updates.priority
     if updates.assignee_id is not None:
@@ -186,6 +188,8 @@ def batch_update_tasks(
             task.status = updates.status
             if updates.status == TaskStatus.COMPLETED:
                 task.completed = True
+            else:
+                task.completed = False
         if updates.priority is not None:
             task.priority = updates.priority
         if updates.assignee_id is not None:
