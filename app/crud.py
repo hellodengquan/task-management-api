@@ -154,11 +154,11 @@ def update_recurrence_plan(db: Session, owner_id: int, plan_id: int, updates: sc
     if not plan:
         return None
 
-    old_frequency = plan.frequency
-    new_frequency = updates.frequency if updates.frequency is not None else old_frequency
+    old_frequency_value = plan.frequency.value if plan.frequency else None
+    new_frequency_value = updates.frequency.value if updates.frequency is not None else old_frequency_value
 
     if updates.frequency is not None:
-        plan.frequency = updates.frequency
+        plan.frequency = models.RecurrenceFrequency(updates.frequency.value)
     if updates.interval is not None:
         plan.interval = updates.interval
     if updates.week_days is not None:
@@ -170,19 +170,21 @@ def update_recurrence_plan(db: Session, owner_id: int, plan_id: int, updates: sc
     if updates.is_active is not None:
         plan.is_active = updates.is_active
 
-    if old_frequency != new_frequency:
+    if old_frequency_value != new_frequency_value:
         current_week_days = _get_week_days_list(plan)
         current_month_days = _get_month_days_list(plan)
         
-        _validate_field_consistency(new_frequency, current_week_days, current_month_days)
-        
-        if new_frequency == models.RecurrenceFrequency.WEEKLY:
+        if new_frequency_value == "weekly":
+            if current_week_days is None or len(current_week_days) == 0:
+                raise ValueError("week_days is required for weekly frequency")
             plan.month_days = None
         
-        elif new_frequency == models.RecurrenceFrequency.MONTHLY:
+        elif new_frequency_value == "monthly":
+            if current_month_days is None or len(current_month_days) == 0:
+                raise ValueError("month_days is required for monthly frequency")
             plan.week_days = None
         
-        elif new_frequency in [models.RecurrenceFrequency.DAILY, models.RecurrenceFrequency.YEARLY]:
+        elif new_frequency_value in ["daily", "yearly"]:
             plan.week_days = None
             plan.month_days = None
         
