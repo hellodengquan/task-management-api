@@ -210,7 +210,7 @@ def trigger_generate_due_tasks(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    tasks = generate_due_tasks(db, current_time)
+    tasks = generate_due_tasks(db, owner_id=current_user.id, current_time=current_time)
     return tasks
 
 

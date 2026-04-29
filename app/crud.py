@@ -1,7 +1,8 @@
 # app/crud.py
-from datetime import datetime
+from datetime import datetime, date as datetime_date
 from typing import List, Optional
 
+from sqlalchemy import Date
 from sqlalchemy.orm import Session
 
 from . import models, schemas
@@ -152,11 +153,15 @@ def list_skipped_occurrences(db: Session, plan_id: int):
 
 
 def is_occurrence_skipped(db: Session, plan_id: int, occurrence_date: datetime) -> bool:
+    target_date = occurrence_date.date()
+    start_of_day = datetime.combine(target_date, datetime.min.time())
+    end_of_day = datetime.combine(target_date, datetime.max.time())
     return (
         db.query(models.SkippedOccurrence)
         .filter(
             models.SkippedOccurrence.recurrence_plan_id == plan_id,
-            models.SkippedOccurrence.occurrence_date == occurrence_date
+            models.SkippedOccurrence.occurrence_date >= start_of_day,
+            models.SkippedOccurrence.occurrence_date <= end_of_day
         )
         .first() is not None
     )

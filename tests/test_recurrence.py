@@ -84,7 +84,7 @@ def test_list_recurrence_plans(client):
     )
     client.post(
         "/recurrence-plans",
-        json={"frequency": "weekly", "interval": 2},
+        json={"frequency": "weekly", "interval": 2, "week_days": [0, 2, 4]},
         headers=headers
     )
 
@@ -100,7 +100,7 @@ def test_get_recurrence_plan(client):
 
     create_response = client.post(
         "/recurrence-plans",
-        json={"frequency": "monthly", "interval": 1},
+        json={"frequency": "monthly", "interval": 1, "month_days": [15]},
         headers=headers
     )
 
@@ -419,7 +419,7 @@ def test_create_task_with_valid_plan_id(client):
 
     create_plan_response = client.post(
         "/recurrence-plans",
-        json={"frequency": "weekly", "interval": 1},
+        json={"frequency": "weekly", "interval": 1, "week_days": [0, 4]},
         headers=headers
     )
 
@@ -438,3 +438,195 @@ def test_create_task_with_valid_plan_id(client):
     assert response.status_code == 201
     data = response.json()
     assert data["recurrence_plan_id"] == plan_id
+
+
+# =====================
+# SECURITY AND VALIDATION TESTS
+# =====================
+
+def test_generate_due_tasks_only_for_current_user(client):
+    headers1 = register_and_login(client, "user1@example.com")
+    headers2 = register_and_login(client, "user2@example.com")
+
+    client.post(
+        "/recurrence-plans",
+        json={"frequency": "daily", "interval": 1, "is_active": True},
+        headers=headers1
+    )
+    client.post(
+        "/recurrence-plans",
+        json={"frequency": "daily", "interval": 1, "is_active": True},
+        headers=headers2
+    )
+
+    future_time = datetime.now() + timedelta(days=1)
+
+    response1 = client.post(
+        f"/recurrence-plans/generate-due-tasks?current_time={future_time.isoformat()}",
+        headers=headers1
+    )
+    response2 = client.post(
+        f"/recurrence-plans/generate-due-tasks?current_time={future_time.isoformat()}",
+        headers=headers2
+    )
+
+    assert response1.status_code == 200
+    assert response2.status_code == 200
+
+    tasks1 = response1.json()
+    tasks2 = response2.json()
+
+    assert len(tasks1) >= 1
+    assert len(tasks2) >= 1
+
+    tasks_response1 = client.get("/tasks", headers=headers1)
+    tasks_response2 = client.get("/tasks", headers=headers2)
+
+    assert len(tasks_response1.json()) == len(tasks_response2.json())
+
+
+def test_weekly_without_week_days_fails(client):
+    headers = register_and_login(client, "user1@example.com")
+
+    response = client.post(
+        "/recurrence-plans",
+        json={"frequency": "weekly", "interval": 1},
+        headers=headers
+    )
+
+    assert response.status_code == 422
+
+
+def test_weekly_with_invalid_week_days_fails(client):
+    headers = register_and_login(client, "user1@example.com")
+
+    response = client.post(
+        "/recurrence-plans",
+        json={"frequency": "weekly", "interval": 1, "week_days": [7, 8, 9]},
+        headers=headers
+    )
+
+    assert response.status_code == 422
+
+
+def test_monthly_without_month_days_fails(client):
+    headers = register_and_login(client, "user1@example.com")
+
+    response = client.post(
+        "/recurrence-plans",
+        json={"frequency": "monthly", "interval": 1},
+        headers=headers
+    )
+
+    assert response.status_code == 422
+
+
+def test_monthly_with_invalid_month_days_fails(client):
+    headers = register_and_login(client, "user1@example.com")
+
+    response = client.post(
+        "/recurrence-plans",
+        json={"frequency": "monthly", "interval": 1, "month_days": [0, 32, 35]},
+        headers=headers
+    )
+
+    assert response.status_code == 422
+
+
+def test_daily_with_week_days_fails(client):
+    headers = register_and_login(client, "user1@example.com")
+
+    response = client.post(
+        "/recurrence-plans",
+        json={"frequency": "daily", "interval": 1, "week_days": [0, 1, 2]},
+        headers=headers
+    )
+
+    assert response.status_code == 422
+
+
+def test_daily_with_month_days_fails(client):
+    headers = register_and_login(client, "user1@example.com")
+
+    response = client.post(
+        "/recurrence-plans",
+        json={"frequency": "daily", "interval": 1, "month_days": [1, 15, 30]},
+        headers=headers
+    )
+
+    assert response.status_code == 422
+
+
+def test_weekly_with_month_days_fails(client):
+    headers = register_and_login(client, "user1@example.com")
+
+    response = client.post(
+        "/recurrence-plans",
+        json={"frequency": "weekly", "interval": 1, "week_days": [0, 2], "month_days": [15]},
+        headers=headers
+    )
+
+    assert response.status_code == 422
+
+
+def test_monthly_with_week_days_fails(client):
+    headers = register_and_login(client, "user1@example.com")
+
+    response = client.post(
+        "/recurrence-plans",
+        json={"frequency": "monthly", "interval": 1, "month_days": [15], "week_days": [0, 2]},
+        headers=headers
+    )
+
+    assert response.status_code == 422
+
+
+def test_skip_by_date_only(client):
+    headers = register_and_login(client, "user1@example.com")
+
+    create_plan_response = client.post(
+        "/recurrence-plans",
+        json={"frequency": "daily", "interval": 1, "is_active": True},
+        headers=headers
+    )
+
+    plan_id = create_plan_response.json()["id"]
+
+    client.post(
+        "/tasks",
+        json={
+            "title": "Daily Task",
+            "recurrence_plan_id": plan_id
+        },
+        headers=headers
+    )
+
+    skip_date = datetime.now().replace(hour=10, minute=30, second=0, microsecond=0) + timedelta(days=1)
+
+    client.post(
+        f"/recurrence-plans/{plan_id}/skipped-occurrences",
+        json={
+            "occurrence_date": skip_date.isoformat(),
+            "reason": "Different time"
+        },
+        headers=headers
+    )
+
+    future_time = skip_date.replace(hour=14, minute=0, second=0)
+
+    response = client.post(
+        f"/recurrence-plans/{plan_id}/generate-tasks?current_time={future_time.isoformat()}",
+        headers=headers
+    )
+
+    assert response.status_code == 200
+
+    tasks = response.json()
+
+    skipped_task_found = any(
+        task.get("due_date") and
+        datetime.fromisoformat(task["due_date"].replace("Z", "+00:00")).date() == skip_date.date()
+        for task in tasks
+    )
+
+    assert not skipped_task_found, "Skipped occurrence (by date) should not generate a task"

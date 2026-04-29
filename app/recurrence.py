@@ -211,16 +211,22 @@ def generate_tasks_for_plan(
     return generated_tasks
 
 
-def generate_due_tasks(db: Session, current_time: datetime = None) -> List[models.Task]:
+def generate_due_tasks(db: Session, owner_id: int = None, current_time: datetime = None) -> List[models.Task]:
     """
     Generate all due tasks for active recurrence plans.
+    If owner_id is provided, only generate tasks for that user's plans.
     """
     if current_time is None:
         current_time = datetime.utcnow()
     
-    active_plans = db.query(models.RecurrencePlan).filter(
+    query = db.query(models.RecurrencePlan).filter(
         models.RecurrencePlan.is_active == True
-    ).all()
+    )
+    
+    if owner_id is not None:
+        query = query.filter(models.RecurrencePlan.owner_id == owner_id)
+    
+    active_plans = query.all()
     
     all_generated_tasks = []
     for plan in active_plans:
