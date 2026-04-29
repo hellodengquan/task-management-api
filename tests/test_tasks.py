@@ -327,6 +327,68 @@ def test_update_task_status_from_completed_to_in_progress(client):
     assert data["completed"] is False
 
 
+def test_update_task_completed_false_sets_status_pending(client):
+    headers = register_and_login(client, "user1@example.com")
+
+    create_response = client.post(
+        "/tasks",
+        json={"title": "Test task", "status": "completed"},
+        headers=headers
+    )
+
+    task_id = create_response.json()["id"]
+    assert create_response.json()["completed"] is True
+    assert create_response.json()["status"] == "completed"
+
+    response = client.patch(
+        f"/tasks/{task_id}",
+        json={"completed": False},
+        headers=headers
+    )
+
+    assert response.status_code == 200
+
+    data = response.json()
+    assert data["completed"] is False
+    assert data["status"] == "pending"
+
+
+def test_update_task_completed_false_from_in_progress(client):
+    headers = register_and_login(client, "user1@example.com")
+
+    create_response = client.post(
+        "/tasks",
+        json={"title": "Test task", "status": "in_progress"},
+        headers=headers
+    )
+
+    task_id = create_response.json()["id"]
+    assert create_response.json()["completed"] is False
+    assert create_response.json()["status"] == "in_progress"
+
+    response = client.patch(
+        f"/tasks/{task_id}",
+        json={"completed": True},
+        headers=headers
+    )
+
+    assert response.status_code == 200
+    assert response.json()["completed"] is True
+    assert response.json()["status"] == "completed"
+
+    response2 = client.patch(
+        f"/tasks/{task_id}",
+        json={"completed": False},
+        headers=headers
+    )
+
+    assert response2.status_code == 200
+
+    data = response2.json()
+    assert data["completed"] is False
+    assert data["status"] == "pending"
+
+
 def test_update_task_priority(client):
     headers = register_and_login(client, "user1@example.com")
 
@@ -573,6 +635,86 @@ def test_batch_update_status_from_completed_to_in_progress(client):
     for task in data["successes"]:
         assert task["status"] == "in_progress"
         assert task["completed"] is False
+
+
+def test_batch_update_completed_false_sets_status_pending(client):
+    headers = register_and_login(client, "user1@example.com")
+
+    task1 = client.post("/tasks", json={"title": "Task 1", "status": "completed"}, headers=headers)
+    task2 = client.post("/tasks", json={"title": "Task 2", "status": "completed"}, headers=headers)
+
+    assert task1.json()["completed"] is True
+    assert task1.json()["status"] == "completed"
+    assert task2.json()["completed"] is True
+    assert task2.json()["status"] == "completed"
+
+    task_ids = [task1.json()["id"], task2.json()["id"]]
+
+    response = client.post(
+        "/tasks/batch/update",
+        json={
+            "task_ids": task_ids,
+            "updates": {"completed": False}
+        },
+        headers=headers
+    )
+
+    assert response.status_code == 200
+
+    data = response.json()
+    assert data["total"] == 2
+    assert data["success_count"] == 2
+    assert data["failure_count"] == 0
+
+    for task in data["successes"]:
+        assert task["completed"] is False
+        assert task["status"] == "pending"
+
+
+def test_batch_update_completed_false_from_in_progress(client):
+    headers = register_and_login(client, "user1@example.com")
+
+    task1 = client.post("/tasks", json={"title": "Task 1", "status": "in_progress"}, headers=headers)
+    task2 = client.post("/tasks", json={"title": "Task 2", "status": "in_progress"}, headers=headers)
+
+    assert task1.json()["completed"] is False
+    assert task1.json()["status"] == "in_progress"
+
+    task_ids = [task1.json()["id"], task2.json()["id"]]
+
+    response = client.post(
+        "/tasks/batch/update",
+        json={
+            "task_ids": task_ids,
+            "updates": {"completed": True}
+        },
+        headers=headers
+    )
+
+    assert response.status_code == 200
+    for task in response.json()["successes"]:
+        assert task["completed"] is True
+        assert task["status"] == "completed"
+
+    response2 = client.post(
+        "/tasks/batch/update",
+        json={
+            "task_ids": task_ids,
+            "updates": {"completed": False}
+        },
+        headers=headers
+    )
+
+    assert response2.status_code == 200
+
+    data = response2.json()
+    assert data["total"] == 2
+    assert data["success_count"] == 2
+    assert data["failure_count"] == 0
+
+    for task in data["successes"]:
+        assert task["completed"] is False
+        assert task["status"] == "pending"
 
 
 def test_batch_update_with_empty_task_ids(client):

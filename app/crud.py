@@ -112,6 +112,8 @@ def update_task(db: Session, owner_id: int, task_id: int, updates: schemas.TaskU
         task.completed = updates.completed
         if updates.completed:
             task.status = TaskStatus.COMPLETED
+        else:
+            task.status = TaskStatus.PENDING
     if updates.status is not None:
         task.status = updates.status
         if updates.status == TaskStatus.COMPLETED:
@@ -184,6 +186,8 @@ def batch_update_tasks(
             task.completed = updates.completed
             if updates.completed:
                 task.status = TaskStatus.COMPLETED
+            else:
+                task.status = TaskStatus.PENDING
         if updates.status is not None:
             task.status = updates.status
             if updates.status == TaskStatus.COMPLETED:
