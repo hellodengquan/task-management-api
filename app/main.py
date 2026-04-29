@@ -33,7 +33,6 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
 
-    # Put user id in "sub" (subject)
     token = create_access_token({"sub": str(user.id)})
     return {"access_token": token, "token_type": "bearer"}
 
@@ -48,7 +47,10 @@ def create_task(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    return crud.create_task(db, current_user.id, task_in)
+    task, error = crud.create_task(db, current_user.id, task_in)
+    if error:
+        raise HTTPException(status_code=400, detail=error)
+    return task
 
 
 @app.get("/tasks", response_model=list[schemas.TaskOut])
@@ -78,9 +80,11 @@ def patch_task(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    task = crud.update_task(db, current_user.id, task_id, updates)
-    if not task:
-        raise HTTPException(status_code=404, detail="Task not found")
+    task, error = crud.update_task(db, current_user.id, task_id, updates)
+    if error == "Task not found":
+        raise HTTPException(status_code=404, detail=error)
+    if error:
+        raise HTTPException(status_code=400, detail=error)
     return task
 
 
@@ -90,7 +94,60 @@ def delete_task(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    ok = crud.delete_task(db, current_user.id, task_id)
+    ok, error = crud.delete_task(db, current_user.id, task_id)
     if not ok:
-        raise HTTPException(status_code=404, detail="Task not found")
+        raise HTTPException(status_code=404, detail=error)
     return None
+
+
+# =====================
+# BATCH OPERATIONS
+# =====================
+
+@app.post("/tasks/batch/update", response_model=schemas.BatchUpdateResponse)
+def batch_update_tasks(
+    request: schemas.BatchUpdateRequest,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    if not request.task_ids:
+        raise HTTPException(status_code=400, detail="No task IDs provided")
+    
+    successes, failures = crud.batch_update_tasks(
+        db,
+        current_user.id,
+        request.task_ids,
+        request.updates
+    )
+    
+    return schemas.BatchUpdateResponse(
+        total=len(request.task_ids),
+        success_count=len(successes),
+        failure_count=len(failures),
+        successes=successes,
+        failures=failures
+    )
+
+
+@app.post("/tasks/batch/delete", response_model=schemas.BatchDeleteResponse)
+def batch_delete_tasks(
+    request: schemas.BatchDeleteRequest,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    if not request.task_ids:
+        raise HTTPException(status_code=400, detail="No task IDs provided")
+    
+    successes, failures = crud.batch_delete_tasks(
+        db,
+        current_user.id,
+        request.task_ids
+    )
+    
+    return schemas.BatchDeleteResponse(
+        total=len(request.task_ids),
+        success_count=len(successes),
+        failure_count=len(failures),
+        successes=successes,
+        failures=failures
+    )
