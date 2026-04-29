@@ -1,4 +1,22 @@
 # app/crud.py
+"""
+CRUD operations for the task management API.
+
+== completed 与 status 一致性策略 ==
+
+当 completed 和 status 同时提交且值冲突时，以 status 为准。
+执行顺序：
+1. 先处理 completed，设置对应的 status
+2. 后处理 status，覆盖前面的结果并同步 completed
+
+这确保了语义更丰富的 status 字段具有更高优先级：
+- status = completed -> completed = true
+- status = pending/in_progress -> completed = false
+
+冲突场景示例：
+- completed=true + status=pending -> 最终 status=pending, completed=false
+- completed=false + status=completed -> 最终 status=completed, completed=true
+"""
 from typing import List, Tuple
 from sqlalchemy.orm import Session
 
@@ -108,18 +126,21 @@ def update_task(db: Session, owner_id: int, task_id: int, updates: schemas.TaskU
         task.title = updates.title
     if updates.description is not None:
         task.description = updates.description
+    
     if updates.completed is not None:
         task.completed = updates.completed
         if updates.completed:
             task.status = TaskStatus.COMPLETED
         else:
             task.status = TaskStatus.PENDING
+    
     if updates.status is not None:
         task.status = updates.status
         if updates.status == TaskStatus.COMPLETED:
             task.completed = True
         else:
             task.completed = False
+    
     if updates.priority is not None:
         task.priority = updates.priority
     if updates.assignee_id is not None:

@@ -389,6 +389,124 @@ def test_update_task_completed_false_from_in_progress(client):
     assert data["status"] == "pending"
 
 
+def test_update_task_conflict_completed_true_status_pending(client):
+    """
+    冲突场景测试：completed=true + status=pending
+    策略：以 status 为准
+    预期结果：status=pending, completed=false
+    """
+    headers = register_and_login(client, "user1@example.com")
+
+    create_response = client.post(
+        "/tasks",
+        json={"title": "Test task", "status": "completed"},
+        headers=headers
+    )
+
+    task_id = create_response.json()["id"]
+    assert create_response.json()["completed"] is True
+    assert create_response.json()["status"] == "completed"
+
+    response = client.patch(
+        f"/tasks/{task_id}",
+        json={"completed": True, "status": "pending"},
+        headers=headers
+    )
+
+    assert response.status_code == 200
+
+    data = response.json()
+    assert data["status"] == "pending"
+    assert data["completed"] is False
+
+
+def test_update_task_conflict_completed_false_status_completed(client):
+    """
+    冲突场景测试：completed=false + status=completed
+    策略：以 status 为准
+    预期结果：status=completed, completed=true
+    """
+    headers = register_and_login(client, "user1@example.com")
+
+    create_response = client.post(
+        "/tasks",
+        json={"title": "Test task", "status": "pending"},
+        headers=headers
+    )
+
+    task_id = create_response.json()["id"]
+    assert create_response.json()["completed"] is False
+    assert create_response.json()["status"] == "pending"
+
+    response = client.patch(
+        f"/tasks/{task_id}",
+        json={"completed": False, "status": "completed"},
+        headers=headers
+    )
+
+    assert response.status_code == 200
+
+    data = response.json()
+    assert data["status"] == "completed"
+    assert data["completed"] is True
+
+
+def test_update_task_no_conflict_completed_only(client):
+    """
+    对照场景：仅更新 completed，不冲突
+    预期结果：completed=true, status=completed
+    """
+    headers = register_and_login(client, "user1@example.com")
+
+    create_response = client.post(
+        "/tasks",
+        json={"title": "Test task", "status": "pending"},
+        headers=headers
+    )
+
+    task_id = create_response.json()["id"]
+
+    response = client.patch(
+        f"/tasks/{task_id}",
+        json={"completed": True},
+        headers=headers
+    )
+
+    assert response.status_code == 200
+
+    data = response.json()
+    assert data["completed"] is True
+    assert data["status"] == "completed"
+
+
+def test_update_task_no_conflict_status_only(client):
+    """
+    对照场景：仅更新 status，不冲突
+    预期结果：status=in_progress, completed=false
+    """
+    headers = register_and_login(client, "user1@example.com")
+
+    create_response = client.post(
+        "/tasks",
+        json={"title": "Test task", "status": "completed"},
+        headers=headers
+    )
+
+    task_id = create_response.json()["id"]
+
+    response = client.patch(
+        f"/tasks/{task_id}",
+        json={"status": "in_progress"},
+        headers=headers
+    )
+
+    assert response.status_code == 200
+
+    data = response.json()
+    assert data["status"] == "in_progress"
+    assert data["completed"] is False
+
+
 def test_update_task_priority(client):
     headers = register_and_login(client, "user1@example.com")
 
@@ -715,6 +833,146 @@ def test_batch_update_completed_false_from_in_progress(client):
     for task in data["successes"]:
         assert task["completed"] is False
         assert task["status"] == "pending"
+
+
+def test_batch_update_conflict_completed_true_status_pending(client):
+    """
+    批量冲突场景测试：completed=true + status=pending
+    策略：以 status 为准
+    预期结果：status=pending, completed=false
+    """
+    headers = register_and_login(client, "user1@example.com")
+
+    task1 = client.post("/tasks", json={"title": "Task 1", "status": "completed"}, headers=headers)
+    task2 = client.post("/tasks", json={"title": "Task 2", "status": "completed"}, headers=headers)
+
+    assert task1.json()["completed"] is True
+    assert task1.json()["status"] == "completed"
+
+    task_ids = [task1.json()["id"], task2.json()["id"]]
+
+    response = client.post(
+        "/tasks/batch/update",
+        json={
+            "task_ids": task_ids,
+            "updates": {"completed": True, "status": "pending"}
+        },
+        headers=headers
+    )
+
+    assert response.status_code == 200
+
+    data = response.json()
+    assert data["total"] == 2
+    assert data["success_count"] == 2
+    assert data["failure_count"] == 0
+
+    for task in data["successes"]:
+        assert task["status"] == "pending"
+        assert task["completed"] is False
+
+
+def test_batch_update_conflict_completed_false_status_completed(client):
+    """
+    批量冲突场景测试：completed=false + status=completed
+    策略：以 status 为准
+    预期结果：status=completed, completed=true
+    """
+    headers = register_and_login(client, "user1@example.com")
+
+    task1 = client.post("/tasks", json={"title": "Task 1", "status": "pending"}, headers=headers)
+    task2 = client.post("/tasks", json={"title": "Task 2", "status": "pending"}, headers=headers)
+
+    assert task1.json()["completed"] is False
+    assert task1.json()["status"] == "pending"
+
+    task_ids = [task1.json()["id"], task2.json()["id"]]
+
+    response = client.post(
+        "/tasks/batch/update",
+        json={
+            "task_ids": task_ids,
+            "updates": {"completed": False, "status": "completed"}
+        },
+        headers=headers
+    )
+
+    assert response.status_code == 200
+
+    data = response.json()
+    assert data["total"] == 2
+    assert data["success_count"] == 2
+    assert data["failure_count"] == 0
+
+    for task in data["successes"]:
+        assert task["status"] == "completed"
+        assert task["completed"] is True
+
+
+def test_batch_update_no_conflict_completed_only(client):
+    """
+    批量对照场景：仅更新 completed，不冲突
+    预期结果：completed=true, status=completed
+    """
+    headers = register_and_login(client, "user1@example.com")
+
+    task1 = client.post("/tasks", json={"title": "Task 1", "status": "pending"}, headers=headers)
+    task2 = client.post("/tasks", json={"title": "Task 2", "status": "in_progress"}, headers=headers)
+
+    task_ids = [task1.json()["id"], task2.json()["id"]]
+
+    response = client.post(
+        "/tasks/batch/update",
+        json={
+            "task_ids": task_ids,
+            "updates": {"completed": True}
+        },
+        headers=headers
+    )
+
+    assert response.status_code == 200
+
+    data = response.json()
+    assert data["total"] == 2
+    assert data["success_count"] == 2
+    assert data["failure_count"] == 0
+
+    for task in data["successes"]:
+        assert task["completed"] is True
+        assert task["status"] == "completed"
+
+
+def test_batch_update_no_conflict_status_only(client):
+    """
+    批量对照场景：仅更新 status，不冲突
+    预期结果：status=in_progress, completed=false
+    """
+    headers = register_and_login(client, "user1@example.com")
+
+    task1 = client.post("/tasks", json={"title": "Task 1", "status": "completed"}, headers=headers)
+    task2 = client.post("/tasks", json={"title": "Task 2", "status": "completed"}, headers=headers)
+
+    task_ids = [task1.json()["id"], task2.json()["id"]]
+
+    response = client.post(
+        "/tasks/batch/update",
+        json={
+            "task_ids": task_ids,
+            "updates": {"status": "in_progress"}
+        },
+        headers=headers
+    )
+
+    assert response.status_code == 200
+
+    data = response.json()
+    assert data["total"] == 2
+    assert data["success_count"] == 2
+    assert data["failure_count"] == 0
+
+    for task in data["successes"]:
+        assert task["status"] == "in_progress"
+        assert task["completed"] is False
 
 
 def test_batch_update_with_empty_task_ids(client):
