@@ -1,8 +1,7 @@
 # app/crud.py
-from datetime import datetime, date as datetime_date
+from datetime import datetime
 from typing import List, Optional
 
-from sqlalchemy import Date
 from sqlalchemy.orm import Session
 
 from . import models, schemas
@@ -131,10 +130,19 @@ def delete_recurrence_plan(db: Session, owner_id: int, plan_id: int) -> bool:
 # SKIPPED OCCURRENCES
 # =====================
 
+def _normalize_date(dt: datetime) -> datetime:
+    """
+    Normalize a datetime to the start of its day (00:00:00).
+    This ensures date matching works regardless of time component.
+    """
+    return dt.replace(hour=0, minute=0, second=0, microsecond=0)
+
+
 def create_skipped_occurrence(db: Session, plan_id: int, occurrence_in: schemas.SkippedOccurrenceCreate):
+    normalized_date = _normalize_date(occurrence_in.occurrence_date)
     skipped = models.SkippedOccurrence(
         recurrence_plan_id=plan_id,
-        occurrence_date=occurrence_in.occurrence_date,
+        occurrence_date=normalized_date,
         reason=occurrence_in.reason,
     )
     db.add(skipped)
@@ -153,15 +161,12 @@ def list_skipped_occurrences(db: Session, plan_id: int):
 
 
 def is_occurrence_skipped(db: Session, plan_id: int, occurrence_date: datetime) -> bool:
-    target_date = occurrence_date.date()
-    start_of_day = datetime.combine(target_date, datetime.min.time())
-    end_of_day = datetime.combine(target_date, datetime.max.time())
+    normalized_date = _normalize_date(occurrence_date)
     return (
         db.query(models.SkippedOccurrence)
         .filter(
             models.SkippedOccurrence.recurrence_plan_id == plan_id,
-            models.SkippedOccurrence.occurrence_date >= start_of_day,
-            models.SkippedOccurrence.occurrence_date <= end_of_day
+            models.SkippedOccurrence.occurrence_date == normalized_date
         )
         .first() is not None
     )
